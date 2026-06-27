@@ -1,0 +1,46 @@
+# ============================================================
+# SupportCraft AI — Environment Variables
+# Copy this file to .env.local and fill in your values
+# ============================================================
+
+# Supabase
+# Get from: https://supabase.com/dashboard → Project → Settings → API
+NEXT_PUBLIC_SUPABASE_URL=https://fkobprkmycdbnbzkwhwm.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2JwcmtteWNkYm5iemt3aHdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzOTY2MjksImV4cCI6MjA5Nzk3MjYyOX0.1pdcxKWrwjcA1dckVxIV7TcDxl3PjOf5_u8WoSanBD8
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2JwcmtteWNkYm5iemt3aHdtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjM5NjYyOSwiZXhwIjoyMDk3OTcyNjI5fQ.gD8UPEpNbMr5-hecDsPUJABUij2lJchFCzAMlJEZlo8
+
+# AI Provider
+# Set to "openai" or "anthropic"
+AI_PROVIDER=openai
+OPENAI_API_KEY=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
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Email — Resend
+# Get from: https://resend.com/api-keys
+RESEND_API_KEY=re_bub9EXLX_DAAicUKB2HBkZ1ttaYMjD3cq
+RESEND_FROM_EMAIL=supportcraft@aakasa.dev
+RESEND_FROM_NAME=SupportCraft AI
+
+# PayPal
+# Sandbox: https://developer.paypal.com/dashboard/
+# Production: https://developer.paypal.com/dashboard/ (switch environment)
+
+PAYPAL_API_URL=https://api-m.paypal.com
+PAYPAL_CLIENT_ID=ARf81xjokXCKWDGo9AyrhNgbTq1hgj6uoA6RAoR24rl0oxeqoWq9eZaHze8qRFv90fu94Lo9vaR4laRB
+PAYPAL_CLIENT_SECRET=EDg-XOUbCTvWalMNOIapAzvvhJSlyrNg8xBc2WL3510a0e1HHBnBUpsuenA9EvB-2T_DTrzIjGIreTSw
+NEXT_PUBLIC_PAYPAL_CLIENT_ID=ARf81xjokXCKWDGo9AyrhNgbTq1hgj6uoA6RAoR24rl0oxeqoWq9eZaHze8qRFv90fu94Lo9vaR4laRB
+PAYPAL_WEBHOOK_ID=your-webhook-id
+PAYPAL_PLAN_ID_PRO=your-pro-plan-id
+PAYPAL_PLAN_ID_BUSINESS=your-business-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO=your-pro-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS=your-business-plan-id
+
+# App URL
+NEXT_PUBLIC_APP_URL=http://localhost:3002
+
+
+EMAIL_PROVIDER=gmail
+GMAIL_CLIENT_ID=419756706827-ubf2djt62lq2k46p9cmf4atcpi81dgb1.apps.googleusercontent.com
+GMAIL_CLIENT_SECRET=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
+GMAIL_REFRESH_TOKEN=1//0gYpE2jxK_tlhCgYIARAAGBASNwF-L9IrIMnzNSkiKABE2SgJXHBwp7Ei16BURlz49_6M66yPza2pr49-B15IXK6C6S7HOweQIQE
+EMAIL_FROM=supportcraft@aakasa.dev

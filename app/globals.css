@@ -1,0 +1,899 @@
+@import "tailwindcss";
+
+/* ============================================================
+   LIGHT THEME — base token layer
+   ============================================================ */
+@theme inline {
+  /* --- Brand Primary (blue-purple) --- */
+  --color-primary:            oklch(0.42 0.18 264);
+  --color-primary-hover:      oklch(0.37 0.20 264);
+  --color-primary-active:     oklch(0.33 0.21 264);
+  --color-primary-subtle:     oklch(0.95 0.04 264);
+  --color-primary-foreground: oklch(0.99 0 0);
+
+  /* --- Secondary (slate-tinted neutral) --- */
+  --color-secondary:            oklch(0.94 0.01 264);
+  --color-secondary-hover:      oklch(0.90 0.02 264);
+  --color-secondary-foreground: oklch(0.22 0.04 264);
+
+  /* --- Accent (violet) --- */
+  --color-accent:            oklch(0.94 0.03 280);
+  --color-accent-hover:      oklch(0.89 0.05 280);
+  --color-accent-foreground: oklch(0.30 0.12 280);
+
+  /* --- Semantic --- */
+  --color-success:            oklch(0.52 0.15 150);
+  --color-success-subtle:     oklch(0.95 0.04 150);
+  --color-success-foreground: oklch(0.98 0 0);
+  --color-warning:            oklch(0.74 0.17 70);
+  --color-warning-subtle:     oklch(0.97 0.04 70);
+  --color-warning-foreground: oklch(0.30 0.06 70);
+  --color-destructive:        oklch(0.56 0.22 27);
+  --color-destructive-subtle: oklch(0.96 0.04 27);
+  --color-destructive-foreground: oklch(0.98 0 0);
+  --color-info:               oklch(0.58 0.16 230);
+  --color-info-subtle:        oklch(0.95 0.04 230);
+  --color-info-foreground:    oklch(0.98 0 0);
+
+  /* --- Backgrounds & Surfaces --- */
+  --color-background:         oklch(0.985 0 0);
+  --color-surface:            oklch(0.975 0.003 264);
+  --color-surface-raised:     oklch(0.99 0 0);
+  --color-card:               oklch(1 0 0);
+  --color-card-foreground:    oklch(0.145 0.02 264);
+  --color-popover:            oklch(1 0 0);
+  --color-popover-foreground: oklch(0.145 0.02 264);
+  --color-overlay:            oklch(0.10 0.02 264 / 0.50);
+  --color-sidebar:            oklch(0.975 0.005 264);
+  --color-sidebar-border:     oklch(0.91 0.01 264);
+
+  /* --- Text --- */
+  --color-foreground:         oklch(0.14 0.025 264);
+  --color-muted:              oklch(0.94 0.01 264);
+  --color-muted-foreground:   oklch(0.50 0.02 264);
+  --color-subtle:             oklch(0.65 0.015 264);
+
+  /* --- Borders & Inputs --- */
+  --color-border:             oklch(0.90 0.01 264);
+  --color-border-strong:      oklch(0.80 0.02 264);
+  --color-input:              oklch(0.90 0.01 264);
+  --color-input-background:   oklch(1 0 0);
+  --color-ring:               oklch(0.42 0.18 264);
+
+  /* --- Interactive States --- */
+  --color-hover:    oklch(0.96 0.01 264);
+  --color-focus:    oklch(0.42 0.18 264 / 0.20);
+  --color-disabled: oklch(0.88 0.005 264);
+  --color-disabled-foreground: oklch(0.60 0.01 264);
+
+  /* --- AI Brand Colors --- */
+  --color-ai:           oklch(0.52 0.22 280);
+  --color-ai-subtle:    oklch(0.95 0.05 280);
+  --color-ai-foreground: oklch(0.98 0 0);
+  --color-ai-border:    oklch(0.80 0.08 280);
+
+  /* --- Radius --- */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-full: 9999px;
+
+  /* --- Shadows / Elevation --- */
+  --shadow-flat:    none;
+  --shadow-low:     0 1px 2px 0 oklch(0.14 0.025 264 / 0.06);
+  --shadow-md:      0 2px 8px -1px oklch(0.14 0.025 264 / 0.08), 0 1px 3px -1px oklch(0.14 0.025 264 / 0.06);
+  --shadow-high:    0 8px 24px -4px oklch(0.14 0.025 264 / 0.10), 0 2px 8px -2px oklch(0.14 0.025 264 / 0.08);
+  --shadow-overlay: 0 16px 48px -8px oklch(0.14 0.025 264 / 0.18), 0 4px 16px -4px oklch(0.14 0.025 264 / 0.10);
+  --shadow-modal:   0 24px 64px -12px oklch(0.14 0.025 264 / 0.24), 0 8px 24px -4px oklch(0.14 0.025 264 / 0.12);
+  --shadow-dropdown: 0 4px 16px -2px oklch(0.14 0.025 264 / 0.10), 0 1px 4px -1px oklch(0.14 0.025 264 / 0.08);
+  --shadow-tooltip: 0 2px 8px -1px oklch(0.14 0.025 264 / 0.14);
+  --shadow-inner:   inset 0 1px 3px 0 oklch(0.14 0.025 264 / 0.08);
+  --shadow-ring:    0 0 0 3px oklch(0.42 0.18 264 / 0.20);
+
+  /* --- Typography --- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* --- Font Sizes (type scale) --- */
+  --text-display:      clamp(2.25rem, 5vw, 3.75rem);
+  --text-h1:           clamp(1.75rem, 3.5vw, 2.25rem);
+  --text-h2:           clamp(1.375rem, 2.5vw, 1.75rem);
+  --text-h3:           clamp(1.125rem, 2vw, 1.375rem);
+  --text-h4:           1.125rem;
+  --text-body-lg:      1.0625rem;
+  --text-body:         0.9375rem;
+  --text-sm:           0.875rem;
+  --text-caption:      0.8125rem;
+  --text-label:        0.8125rem;
+  --text-button:       0.875rem;
+  --text-code:         0.875rem;
+
+  /* --- Leading --- */
+  --leading-display: 1.1;
+  --leading-heading: 1.25;
+  --leading-body:    1.6;
+  --leading-tight:   1.35;
+  --leading-relaxed: 1.75;
+
+  /* --- Tracking --- */
+  --tracking-tight:   -0.03em;
+  --tracking-normal:  -0.01em;
+  --tracking-wide:    0.02em;
+  --tracking-widest:  0.08em;
+
+  /* --- Spacing scale additions --- */
+  --spacing-sidebar: 15rem;
+  --spacing-sidebar-collapsed: 4rem;
+  --spacing-header: 3.5rem;
+
+  /* --- Transition --- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-instant: 60ms;
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 500ms;
+}
+
+/* ============================================================
+   DARK THEME — independently designed (not inverted)
+   Applied when <html class="dark"> (via next-themes)
+   ============================================================ */
+.dark {
+  /* --- Brand Primary --- */
+  --color-primary:            oklch(0.60 0.18 264);
+  --color-primary-hover:      oklch(0.66 0.19 264);
+  --color-primary-active:     oklch(0.70 0.17 264);
+  --color-primary-subtle:     oklch(0.20 0.06 264);
+  --color-primary-foreground: oklch(0.98 0 0);
+
+  /* --- Secondary --- */
+  --color-secondary:            oklch(0.22 0.03 264);
+  --color-secondary-hover:      oklch(0.26 0.04 264);
+  --color-secondary-foreground: oklch(0.88 0.02 264);
+
+  /* --- Accent --- */
+  --color-accent:            oklch(0.22 0.05 280);
+  --color-accent-hover:      oklch(0.28 0.07 280);
+  --color-accent-foreground: oklch(0.80 0.10 280);
+
+  /* --- Semantic --- */
+  --color-success:            oklch(0.60 0.16 150);
+  --color-success-subtle:     oklch(0.18 0.05 150);
+  --color-success-foreground: oklch(0.98 0 0);
+  --color-warning:            oklch(0.76 0.16 70);
+  --color-warning-subtle:     oklch(0.20 0.05 70);
+  --color-warning-foreground: oklch(0.14 0.03 70);
+  --color-destructive:        oklch(0.65 0.22 27);
+  --color-destructive-subtle: oklch(0.18 0.06 27);
+  --color-destructive-foreground: oklch(0.98 0 0);
+  --color-info:               oklch(0.65 0.16 230);
+  --color-info-subtle:        oklch(0.18 0.05 230);
+  --color-info-foreground:    oklch(0.98 0 0);
+
+  /* --- Backgrounds (dark = deep navy-slate, not pure black) --- */
+  --color-background:         oklch(0.12 0.02 264);
+  --color-surface:            oklch(0.15 0.025 264);
+  --color-surface-raised:     oklch(0.18 0.025 264);
+  --color-card:               oklch(0.17 0.025 264);
+  --color-card-foreground:    oklch(0.92 0.01 264);
+  --color-popover:            oklch(0.16 0.025 264);
+  --color-popover-foreground: oklch(0.92 0.01 264);
+  --color-overlay:            oklch(0.04 0.01 264 / 0.70);
+  --color-sidebar:            oklch(0.13 0.025 264);
+  --color-sidebar-border:     oklch(0.22 0.03 264);
+
+  /* --- Text --- */
+  --color-foreground:         oklch(0.92 0.01 264);
+  --color-muted:              oklch(0.22 0.03 264);
+  --color-muted-foreground:   oklch(0.60 0.02 264);
+  --color-subtle:             oklch(0.46 0.02 264);
+
+  /* --- Borders & Inputs --- */
+  --color-border:             oklch(0.24 0.03 264);
+  --color-border-strong:      oklch(0.32 0.04 264);
+  --color-input:              oklch(0.24 0.03 264);
+  --color-input-background:   oklch(0.16 0.025 264);
+  --color-ring:               oklch(0.60 0.18 264);
+
+  /* --- Interactive States --- */
+  --color-hover:    oklch(0.22 0.03 264);
+  --color-focus:    oklch(0.60 0.18 264 / 0.25);
+  --color-disabled: oklch(0.22 0.02 264);
+  --color-disabled-foreground: oklch(0.42 0.01 264);
+
+  /* --- AI Brand Colors (dark) --- */
+  --color-ai:           oklch(0.66 0.22 280);
+  --color-ai-subtle:    oklch(0.18 0.06 280);
+  --color-ai-foreground: oklch(0.98 0 0);
+  --color-ai-border:    oklch(0.30 0.08 280);
+
+  /* --- Shadows (dark — use glow-style, minimal opacity) --- */
+  --shadow-flat:    none;
+  --shadow-low:     0 1px 2px 0 oklch(0.04 0.01 264 / 0.30);
+  --shadow-md:      0 2px 8px -1px oklch(0.04 0.01 264 / 0.40), 0 1px 3px -1px oklch(0.04 0.01 264 / 0.30);
+  --shadow-high:    0 8px 24px -4px oklch(0.04 0.01 264 / 0.50), 0 2px 8px -2px oklch(0.04 0.01 264 / 0.40);
+  --shadow-overlay: 0 16px 48px -8px oklch(0.04 0.01 264 / 0.60), 0 4px 16px -4px oklch(0.04 0.01 264 / 0.40);
+  --shadow-modal:   0 24px 64px -12px oklch(0.04 0.01 264 / 0.70), 0 8px 24px -4px oklch(0.04 0.01 264 / 0.50);
+  --shadow-dropdown: 0 4px 16px -2px oklch(0.04 0.01 264 / 0.50), 0 1px 4px -1px oklch(0.04 0.01 264 / 0.40);
+  --shadow-tooltip: 0 2px 8px -1px oklch(0.04 0.01 264 / 0.50);
+  --shadow-inner:   inset 0 1px 3px 0 oklch(0.04 0.01 264 / 0.30);
+  --shadow-ring:    0 0 0 3px oklch(0.60 0.18 264 / 0.25);
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-normal);
+  }
+
+  /* Focus visible — accessible, beautiful */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: oklch(0.42 0.18 264 / 0.20);
+    color: var(--color-foreground);
+  }
+
+  .dark ::selection {
+    background-color: oklch(0.60 0.18 264 / 0.30);
+  }
+
+  /* Scrollbar (webkit) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: var(--radius-full);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-border-strong);
+  }
+
+  /* Typography base */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-foreground);
+  }
+
+  p {
+    line-height: var(--leading-body);
+    color: var(--color-foreground);
+  }
+
+  code, kbd, pre, samp {
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+  }
+
+  a {
+    color: var(--color-primary);
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-standard);
+  }
+  a:hover {
+    color: var(--color-primary-hover);
+  }
+}
+
+/* ============================================================
+   TYPOGRAPHY UTILITY CLASSES
+   ============================================================ */
+@layer utilities {
+  .text-display {
+    font-size: var(--text-display);
+    font-weight: 700;
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-tight);
+    font-family: var(--font-display);
+  }
+
+  .text-h1 {
+    font-size: var(--text-h1);
+    font-weight: 700;
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .text-h2 {
+    font-size: var(--text-h2);
+    font-weight: 600;
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .text-h3 {
+    font-size: var(--text-h3);
+    font-weight: 600;
+    line-height: var(--leading-tight);
+    letter-spacing: -0.015em;
+  }
+
+  .text-h4 {
+    font-size: var(--text-h4);
+    font-weight: 500;
+    line-height: var(--leading-tight);
+    letter-spacing: -0.01em;
+  }
+
+  .text-body-lg {
+    font-size: var(--text-body-lg);
+    line-height: var(--leading-relaxed);
+  }
+
+  .text-body {
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+  }
+
+  .text-sm {
+    font-size: var(--text-sm);
+    line-height: var(--leading-body);
+  }
+
+  .text-caption {
+    font-size: var(--text-caption);
+    line-height: var(--leading-tight);
+    color: var(--color-muted-foreground);
+  }
+
+  .text-label {
+    font-size: var(--text-label);
+    font-weight: 500;
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+  }
+
+  .text-button {
+    font-size: var(--text-button);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.005em;
+  }
+
+  .text-code {
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+    background-color: var(--color-muted);
+    color: var(--color-foreground);
+    padding: 0.125em 0.375em;
+    border-radius: var(--radius-sm);
+  }
+
+  /* ============================================================
+     LAYOUT UTILITIES
+     ============================================================ */
+  .sc-container {
+    width: 100%;
+    max-width: 80rem;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+
+  .sc-container-narrow {
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+
+  .sc-container-wide {
+    width: 100%;
+    max-width: 90rem;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+
+  /* ============================================================
+     ELEVATION UTILITIES
+     ============================================================ */
+  .elevation-flat     { box-shadow: var(--shadow-flat); }
+  .elevation-low      { box-shadow: var(--shadow-low); }
+  .elevation-md       { box-shadow: var(--shadow-md); }
+  .elevation-high     { box-shadow: var(--shadow-high); }
+  .elevation-overlay  { box-shadow: var(--shadow-overlay); }
+  .elevation-modal    { box-shadow: var(--shadow-modal); }
+  .elevation-dropdown { box-shadow: var(--shadow-dropdown); }
+  .elevation-tooltip  { box-shadow: var(--shadow-tooltip); }
+
+  /* ============================================================
+     GLASS EFFECTS
+     ============================================================ */
+  .sc-glass {
+    background-color: oklch(1 0 0 / 0.80);
+    backdrop-filter: blur(12px) saturate(1.4);
+    -webkit-backdrop-filter: blur(12px) saturate(1.4);
+    border: 1px solid oklch(1 0 0 / 0.20);
+  }
+
+  .dark .sc-glass {
+    background-color: oklch(0.17 0.025 264 / 0.80);
+    border-color: oklch(0.30 0.04 264 / 0.30);
+  }
+
+  .sc-glass-subtle {
+    background-color: oklch(1 0 0 / 0.60);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid oklch(1 0 0 / 0.15);
+  }
+
+  .dark .sc-glass-subtle {
+    background-color: oklch(0.17 0.025 264 / 0.60);
+    border-color: oklch(0.30 0.04 264 / 0.20);
+  }
+
+  /* ============================================================
+     GRADIENT UTILITIES
+     ============================================================ */
+  .sc-hero-gradient {
+    background: linear-gradient(
+      135deg,
+      oklch(0.42 0.18 264 / 0.06) 0%,
+      oklch(0.52 0.22 280 / 0.04) 50%,
+      oklch(0.60 0.16 230 / 0.03) 100%
+    );
+  }
+
+  .sc-gradient-primary {
+    background: linear-gradient(135deg, oklch(0.42 0.18 264) 0%, oklch(0.52 0.22 280) 100%);
+  }
+
+  .sc-gradient-ai {
+    background: linear-gradient(135deg, oklch(0.45 0.20 264) 0%, oklch(0.55 0.24 280) 100%);
+  }
+
+  /* Primary gradient CTA button — landing page */
+  .sc-btn-primary {
+    background: linear-gradient(135deg, oklch(0.42 0.18 264) 0%, oklch(0.52 0.22 280) 100%);
+    color: oklch(0.99 0 0);
+    transition: opacity 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 12px oklch(0.42 0.18 264 / 0.30);
+  }
+  .sc-btn-primary:hover {
+    opacity: 0.88;
+    box-shadow: 0 4px 20px oklch(0.42 0.18 264 / 0.40);
+  }
+
+  .sc-text-gradient {
+    background: linear-gradient(135deg, oklch(0.42 0.18 264) 0%, oklch(0.52 0.22 280) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ============================================================
+     SIDEBAR
+     ============================================================ */
+  .sc-sidebar {
+    background-color: var(--color-sidebar);
+    border-right: 1px solid var(--color-sidebar-border);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ============================================================
+     ANIMATION UTILITIES (CSS-based)
+     ============================================================ */
+  .animate-fade-in {
+    animation: fadeIn var(--duration-normal) var(--ease-decelerate) both;
+  }
+
+  .animate-slide-up {
+    animation: slideUp var(--duration-normal) var(--ease-decelerate) both;
+  }
+
+  .animate-slide-down {
+    animation: slideDown var(--duration-normal) var(--ease-decelerate) both;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn var(--duration-fast) var(--ease-spring) both;
+  }
+
+  .animate-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-muted) 25%,
+      var(--color-border) 50%,
+      var(--color-muted) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton 1.5s ease-in-out infinite;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes skeleton {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 oklch(0.52 0.22 280 / 0.40); }
+    50%       { box-shadow: 0 0 0 8px oklch(0.52 0.22 280 / 0); }
+  }
+
+  @keyframes ai-typing {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40%           { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* ============================================================
+     AI-SPECIFIC UTILITIES
+     ============================================================ */
+  .sc-ai-badge {
+    background: linear-gradient(135deg, oklch(0.45 0.20 264 / 0.12) 0%, oklch(0.55 0.24 280 / 0.12) 100%);
+    border: 1px solid var(--color-ai-border);
+    color: var(--color-ai);
+    border-radius: var(--radius-full);
+  }
+
+  .sc-ai-card {
+    background: linear-gradient(135deg, oklch(0.95 0.04 264 / 0.60) 0%, oklch(0.95 0.05 280 / 0.60) 100%);
+    border: 1px solid var(--color-ai-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .dark .sc-ai-card {
+    background: linear-gradient(135deg, oklch(0.18 0.06 264 / 0.60) 0%, oklch(0.18 0.06 280 / 0.60) 100%);
+  }
+
+  .sc-ai-pulse {
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+
+  /* ============================================================
+     FORM FOCUS RING
+     ============================================================ */
+  .sc-focus-ring {
+    transition: box-shadow var(--duration-fast) var(--ease-standard),
+                border-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .sc-focus-ring:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-focus);
+    border-color: var(--color-ring);
+  }
+
+  /* ============================================================
+     INTERACTIVE STATES
+     ============================================================ */
+  .sc-interactive {
+    transition: background-color var(--duration-fast) var(--ease-standard),
+                color var(--duration-fast) var(--ease-standard),
+                box-shadow var(--duration-fast) var(--ease-standard);
+  }
+
+  .sc-interactive:hover {
+    background-color: var(--color-hover);
+  }
+
+  /* ============================================================
+     STATUS BADGES
+     ============================================================ */
+  .sc-status-open       { background-color: var(--color-info-subtle);        color: var(--color-info);        border: 1px solid oklch(0.58 0.16 230 / 0.25); }
+  .sc-status-pending    { background-color: var(--color-warning-subtle);      color: var(--color-warning-foreground); border: 1px solid oklch(0.74 0.17 70 / 0.25); }
+  .sc-status-resolved   { background-color: var(--color-success-subtle);      color: var(--color-success);     border: 1px solid oklch(0.52 0.15 150 / 0.25); }
+  .sc-status-closed     { background-color: var(--color-muted);               color: var(--color-muted-foreground); border: 1px solid var(--color-border); }
+  .sc-priority-urgent   { background-color: var(--color-destructive-subtle);  color: var(--color-destructive); border: 1px solid oklch(0.56 0.22 27 / 0.25); }
+  .sc-priority-high     { background-color: oklch(0.97 0.04 40);              color: oklch(0.50 0.18 40);      border: 1px solid oklch(0.60 0.18 40 / 0.25); }
+  .sc-priority-medium   { background-color: var(--color-warning-subtle);      color: var(--color-warning-foreground); border: 1px solid oklch(0.74 0.17 70 / 0.25); }
+  .sc-priority-low      { background-color: var(--color-muted);               color: var(--color-muted-foreground); border: 1px solid var(--color-border); }
+
+  /* ============================================================
+     SURFACE VARIANTS
+     ============================================================ */
+  .sc-surface {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .sc-surface-raised {
+    background-color: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-low);
+  }
+
+  .sc-card {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-low);
+  }
+
+  /* ============================================================
+     DIVIDER
+     ============================================================ */
+  .sc-divider {
+    height: 1px;
+    background-color: var(--color-border);
+    margin-block: 1rem;
+  }
+
+  .sc-divider-strong {
+    height: 1px;
+    background-color: var(--color-border-strong);
+  }
+
+  /* ============================================================
+     DROPDOWN / MENU ITEM
+     ============================================================ */
+  .sc-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-foreground);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease-standard);
+    text-align: left;
+    background: transparent;
+    border: none;
+    outline: none;
+  }
+
+  .sc-dropdown-item:hover,
+  .sc-dropdown-item:focus-visible {
+    background-color: var(--color-hover);
+  }
+
+  .sc-dropdown-item:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+  }
+
+  /* ============================================================
+     SCROLLABLE AREA
+     ============================================================ */
+  .sc-scroll {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  /* ============================================================
+     TRUNCATION
+     ============================================================ */
+  .sc-truncate {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* ============================================================
+     RESPONSIVE VISIBILITY
+     ============================================================ */
+  @media (max-width: 768px) {
+    .sc-desktop-only { display: none !important; }
+  }
+
+  @media (min-width: 769px) {
+    .sc-mobile-only { display: none !important; }
+  }
+
+  /* ── Article rich-text renderer ─────────────────────────────────────────────
+     Applied via .article-content wrapper. Styles TipTap HTML output:
+     headings, paragraphs, lists, blockquotes, code blocks, tables, links.
+  ── */
+  .article-content {
+    color: var(--color-foreground);
+    font-size: 0.9375rem;
+    line-height: 1.75;
+  }
+
+  .article-content > * + * { margin-top: 1em; }
+
+  .article-content h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-top: 2em;
+    margin-bottom: 0.5em;
+    color: var(--color-foreground);
+  }
+  .article-content h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 1.75em;
+    margin-bottom: 0.4em;
+    color: var(--color-foreground);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.3em;
+  }
+  .article-content h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.4;
+    margin-top: 1.5em;
+    margin-bottom: 0.35em;
+    color: var(--color-foreground);
+  }
+
+  .article-content p {
+    margin: 0.75em 0;
+    color: var(--color-foreground);
+  }
+
+  .article-content ul,
+  .article-content ol {
+    padding-left: 1.5em;
+    margin: 0.75em 0;
+  }
+  .article-content ul { list-style-type: disc; }
+  .article-content ol { list-style-type: decimal; }
+  .article-content li { margin: 0.3em 0; }
+  .article-content li p { margin: 0.2em 0; }
+
+  .article-content blockquote {
+    border-left: 3px solid var(--color-primary);
+    padding-left: 1em;
+    margin: 1em 0;
+    color: var(--color-muted-foreground);
+    font-style: italic;
+  }
+
+  .article-content code {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0.15em 0.4em;
+    border-radius: 0.3em;
+  }
+
+  .article-content pre {
+    background: var(--color-muted);
+    border-radius: 0.75rem;
+    padding: 1em 1.25em;
+    overflow-x: auto;
+    margin: 1em 0;
+  }
+  .article-content pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.875em;
+    color: var(--color-foreground);
+  }
+
+  .article-content a {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .article-content a:hover { color: var(--color-primary-hover); }
+
+  .article-content strong { font-weight: 700; }
+  .article-content em     { font-style: italic; }
+  .article-content s      { text-decoration: line-through; }
+
+  .article-content hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1.5em 0;
+  }
+
+  .article-content img {
+    max-width: 100%;
+    border-radius: 0.75rem;
+    margin: 1em 0;
+  }
+
+  .article-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: 0.875rem;
+  }
+  .article-content th,
+  .article-content td {
+    border: 1px solid var(--color-border);
+    padding: 0.5em 0.75em;
+    text-align: left;
+  }
+  .article-content th {
+    background: var(--color-muted);
+    font-weight: 600;
+  }
+  .article-content tr:nth-child(even) td {
+    background: var(--color-muted)/30;
+  }
+
+  /* TipTap editor prose styles (inside the editor itself) */
+  .ProseMirror {
+    outline: none;
+    min-height: 400px;
+  }
+  .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: var(--color-muted-foreground);
+    pointer-events: none;
+    height: 0;
+    opacity: 0.5;
+  }
+  .ProseMirror h1 { font-size: 1.6rem; font-weight: 700; margin: 0.75em 0 0.3em; }
+  .ProseMirror h2 { font-size: 1.25rem; font-weight: 700; margin: 0.75em 0 0.3em; border-bottom: 1px solid var(--color-border); padding-bottom: 0.25em; }
+  .ProseMirror h3 { font-size: 1.05rem; font-weight: 600; margin: 0.6em 0 0.25em; }
+  .ProseMirror p  { margin: 0.5em 0; line-height: 1.75; color: var(--color-foreground); }
+  .ProseMirror ul { list-style: disc; padding-left: 1.5em; }
+  .ProseMirror ol { list-style: decimal; padding-left: 1.5em; }
+  .ProseMirror li { margin: 0.25em 0; }
+  .ProseMirror blockquote { border-left: 3px solid var(--color-primary); padding-left: 1em; color: var(--color-muted-foreground); font-style: italic; margin: 0.75em 0; }
+  .ProseMirror code:not(pre code) { background: var(--color-muted); padding: 0.15em 0.4em; border-radius: 0.3em; font-size: 0.85em; }
+  .ProseMirror pre { background: var(--color-muted); border-radius: 0.75rem; padding: 1em; overflow-x: auto; }
+  .ProseMirror pre code { background: transparent; padding: 0; }
+  .ProseMirror a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
+  .ProseMirror hr { border: none; border-top: 1px solid var(--color-border); margin: 1.25em 0; }
+  .ProseMirror img { max-width: 100%; border-radius: 0.75rem; }
+}

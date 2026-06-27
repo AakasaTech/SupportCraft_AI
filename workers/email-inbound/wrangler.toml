@@ -1,0 +1,16 @@
+name = "supportcraft-email-inbound"
+main = "index.ts"
+compatibility_date = "2025-01-01"
+
+[[routes]]
+pattern = "*@supportcraft.aakasa.dev"
+
+[vars]
+SUPABASE_INBOUND_URL = "https://<project-ref>.supabase.co/functions/v1/email-inbound"
+
+[[kv_namespaces]]
+binding = "TENANT_MAP"
+id = "<kv-namespace-id>"
+
+# Secrets (set via: wrangler secret put INBOUND_SECRET)
+# INBOUND_SECRET = "<strong-random-32-byte-secret>"

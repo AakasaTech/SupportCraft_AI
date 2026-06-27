@@ -1,0 +1,865 @@
+```markdown
+# Phase 17 – Final Production Review, Optimization & Release Readiness
+
+## Objective
+
+You are acting as a **Principal Software Architect, Staff Engineer, DevOps Architect, Security Engineer, QA Lead, Product Designer, Performance Engineer, and Technical Writer**.
+
+Your responsibility is to perform a **complete production readiness review** of the entire **SupportCraft AI** codebase.
+
+Do **not** build new features unless required to fix identified issues.
+
+Instead, perform a comprehensive audit of the application and ensure it meets enterprise-grade production standards.
+
+SupportCraft AI is a multi-tenant SaaS application built under the **Aakasa Digital** ecosystem and must be suitable for commercial deployment.
+
+---
+
+# Technology Stack
+
+Application
+
+- Next.js 15
+- React 19
+- TypeScript
+- Tailwind CSS v4
+- shadcn/ui
+
+Backend
+
+- Supabase
+- PostgreSQL
+- Supabase Auth
+- Supabase Storage
+- Supabase Realtime
+- Supabase Edge Functions
+
+Infrastructure
+
+- Vercel
+- GitHub
+- PayPal
+- OpenAI
+- Anthropic
+
+---
+
+# Overall Review
+
+Review the entire project.
+
+Include:
+
+- Folder structure
+- Architecture
+- Feature completeness
+- Code quality
+- Security
+- Performance
+- Maintainability
+- Scalability
+- User experience
+- Accessibility
+
+Identify weaknesses and improve them.
+
+---
+
+# Architecture Review
+
+Validate:
+
+- Feature-based architecture
+- Separation of concerns
+- Reusable components
+- Service abstraction
+- Provider abstraction
+- Clean dependency management
+- Shared libraries
+- Shared UI components
+
+Remove duplicate code.
+
+---
+
+# Code Quality
+
+Review:
+
+TypeScript
+
+React
+
+Server Components
+
+Client Components
+
+Hooks
+
+Utilities
+
+API Routes
+
+Server Actions
+
+Edge Functions
+
+Requirements:
+
+No dead code
+
+No duplicated logic
+
+No TODO comments
+
+No console.log()
+
+No unused imports
+
+No TypeScript errors
+
+No ESLint warnings
+
+No build warnings
+
+---
+
+# Security Review
+
+Review:
+
+Authentication
+
+Authorization
+
+RLS Policies
+
+Input Validation
+
+Output Sanitization
+
+SQL Injection
+
+XSS
+
+CSRF
+
+Session Management
+
+API Keys
+
+Webhook Verification
+
+Secrets
+
+Rate Limiting
+
+CORS
+
+Audit Logging
+
+Attachment Upload Security
+
+Ensure least privilege everywhere.
+
+---
+
+# Database Review
+
+Review:
+
+Indexes
+
+Foreign Keys
+
+Constraints
+
+Triggers
+
+Views
+
+Materialized Views
+
+Functions
+
+RLS
+
+Query Performance
+
+Migration Files
+
+Seed Files
+
+Generated Types
+
+Ensure the schema scales to millions of records.
+
+---
+
+# UI Review
+
+Review every page.
+
+Dashboard
+
+Tickets
+
+Customers
+
+Knowledge Base
+
+Reports
+
+Billing
+
+Automation
+
+Settings
+
+Portal
+
+Authentication
+
+Ensure:
+
+Consistent spacing
+
+Consistent typography
+
+Consistent colors
+
+Responsive layouts
+
+Smooth animations
+
+No layout shifts
+
+No visual inconsistencies
+
+---
+
+# UX Review
+
+Review workflows.
+
+Registration
+
+Organization Creation
+
+Ticket Submission
+
+Ticket Resolution
+
+Knowledge Search
+
+Billing
+
+Automation
+
+AI Features
+
+Settings
+
+Optimize for:
+
+Minimal clicks
+
+Clear navigation
+
+Fast task completion
+
+Logical information hierarchy
+
+---
+
+# Accessibility Review
+
+Verify WCAG 2.2 AA compliance.
+
+Review:
+
+Keyboard Navigation
+
+Focus Indicators
+
+ARIA Labels
+
+Semantic HTML
+
+Screen Reader Support
+
+Accessible Tables
+
+Accessible Forms
+
+Accessible Dialogs
+
+Color Contrast
+
+Skip Navigation
+
+---
+
+# Performance Review
+
+Review:
+
+Bundle Size
+
+Tree Shaking
+
+Code Splitting
+
+Lazy Loading
+
+Streaming
+
+Image Optimization
+
+Caching
+
+Database Queries
+
+Server Components
+
+Hydration
+
+Realtime Subscriptions
+
+Edge Functions
+
+Optimize everything.
+
+---
+
+# AI Review
+
+Review:
+
+Prompt Quality
+
+Prompt Injection Protection
+
+Context Building
+
+Caching
+
+Cost Optimization
+
+Fallback Providers
+
+Retry Logic
+
+Usage Tracking
+
+AI Settings
+
+Security
+
+Ensure AI requests are efficient.
+
+---
+
+# Email Review
+
+Review:
+
+Templates
+
+Deliverability
+
+Thread Detection
+
+Spam Handling
+
+Bounce Handling
+
+Provider Abstraction
+
+Attachments
+
+Notifications
+
+---
+
+# Billing Review
+
+Review:
+
+Subscriptions
+
+Usage Tracking
+
+Invoices
+
+Webhooks
+
+Payment Verification
+
+Upgrade Flow
+
+Downgrade Flow
+
+Trials
+
+Seat Limits
+
+AI Limits
+
+---
+
+# Automation Review
+
+Review:
+
+Workflow Engine
+
+Triggers
+
+Conditions
+
+Actions
+
+Retry Logic
+
+Loop Prevention
+
+Execution History
+
+Performance
+
+---
+
+# Reporting Review
+
+Review:
+
+Queries
+
+Materialized Views
+
+Charts
+
+Exports
+
+Realtime Updates
+
+Scheduled Reports
+
+Caching
+
+---
+
+# API Review
+
+Review:
+
+REST Standards
+
+Authentication
+
+Authorization
+
+Validation
+
+Error Responses
+
+Pagination
+
+Filtering
+
+OpenAPI
+
+Swagger
+
+Documentation
+
+Webhooks
+
+SDK Readiness
+
+---
+
+# Logging Review
+
+Ensure logging exists for:
+
+Authentication
+
+Errors
+
+API Requests
+
+Billing
+
+AI
+
+Automation
+
+Email
+
+Webhooks
+
+Security
+
+Do not log sensitive data.
+
+---
+
+# Monitoring
+
+Prepare monitoring.
+
+Support:
+
+Application Health
+
+API Health
+
+Database Health
+
+Realtime
+
+Email
+
+AI
+
+Billing
+
+Queue
+
+Webhooks
+
+Future:
+
+Prometheus
+
+Grafana
+
+OpenTelemetry
+
+Sentry
+
+---
+
+# Error Handling
+
+Review every module.
+
+Ensure:
+
+Graceful Errors
+
+Retry
+
+Fallback UI
+
+Helpful Messages
+
+Recovery Options
+
+No unhandled exceptions.
+
+---
+
+# Notifications
+
+Review:
+
+Email Notifications
+
+In-App Notifications
+
+Realtime Notifications
+
+Delivery
+
+Failure Handling
+
+User Preferences
+
+---
+
+# Mobile Review
+
+Review:
+
+Responsive Layout
+
+Navigation
+
+Tables
+
+Forms
+
+Dialogs
+
+Performance
+
+Touch Targets
+
+---
+
+# Browser Compatibility
+
+Support:
+
+Chrome
+
+Firefox
+
+Safari
+
+Edge
+
+Mobile Browsers
+
+---
+
+# SEO Review
+
+Review:
+
+Metadata
+
+Sitemap
+
+Robots.txt
+
+Structured Data
+
+Canonical URLs
+
+Open Graph
+
+Twitter Cards
+
+Knowledge Base SEO
+
+Landing Pages
+
+---
+
+# Internationalization
+
+Prepare architecture for:
+
+Multiple Languages
+
+RTL
+
+Localized Dates
+
+Localized Currency
+
+Localized Timezones
+
+---
+
+# Backup & Recovery
+
+Prepare documentation for:
+
+Database Backup
+
+Storage Backup
+
+Disaster Recovery
+
+Restore Procedures
+
+Rollback Strategy
+
+---
+
+# CI/CD Review
+
+Review:
+
+GitHub Actions
+
+Build Pipeline
+
+Testing
+
+Deployment
+
+Environment Variables
+
+Secrets
+
+Rollback
+
+Release Process
+
+---
+
+# Testing
+
+Review:
+
+Unit Tests
+
+Integration Tests
+
+Component Tests
+
+End-to-End Tests
+
+Accessibility Tests
+
+Performance Tests
+
+Security Tests
+
+API Tests
+
+Increase coverage where required.
+
+---
+
+# Documentation
+
+Generate documentation.
+
+Include:
+
+Architecture
+
+Installation
+
+Development Setup
+
+Deployment
+
+Environment Variables
+
+Database
+
+API
+
+AI
+
+Billing
+
+Automation
+
+Email
+
+Troubleshooting
+
+Contribution Guide
+
+Coding Standards
+
+---
+
+# Production Deployment
+
+Generate deployment guides.
+
+Support:
+
+Development
+
+Staging
+
+Production
+
+Document:
+
+Environment Variables
+
+Secrets
+
+Domains
+
+DNS
+
+Supabase
+
+Vercel
+
+SMTP
+
+PayPal
+
+OpenAI
+
+Anthropic
+
+---
+
+# Release Checklist
+
+Generate:
+
+Pre-release Checklist
+
+Deployment Checklist
+
+Rollback Checklist
+
+Smoke Test Checklist
+
+Security Checklist
+
+Performance Checklist
+
+Monitoring Checklist
+
+---
+
+# Folder Structure Review
+
+Review entire folder structure.
+
+Ensure consistency.
+
+Recommend improvements where necessary.
+
+---
+
+# Final Deliverables
+
+Generate:
+
+1. Production Readiness Report
+2. Architecture Review Report
+3. Security Audit Report
+4. Database Review Report
+5. Performance Optimization Report
+6. Accessibility Report
+7. UI/UX Review
+8. API Review
+9. AI Review
+10. Email Review
+11. Billing Review
+12. Automation Review
+13. Testing Report
+14. Monitoring Plan
+15. Deployment Guide
+16. Environment Variable Reference
+17. Production Checklist
+18. Release Checklist
+19. Maintenance Guide
+20. Technical Debt Report
+21. Future Roadmap Recommendations
+
+---
+
+# Success Criteria
+
+SupportCraft AI should:
+
+- Pass a full enterprise production readiness review
+- Build successfully with zero TypeScript, ESLint, or build errors
+- Meet modern security best practices
+- Scale efficiently to enterprise workloads
+- Deliver excellent UX across desktop, tablet, and mobile devices
+- Be fully multi-tenant using Supabase Row Level Security
+- Meet WCAG 2.2 AA accessibility standards
+- Be optimized for performance, observability, and maintainability
+- Integrate seamlessly with the Aakasa Digital shared platform
+- Be ready for commercial launch with comprehensive documentation, monitoring, deployment automation, and operational runbooks
+```
