@@ -55,7 +55,7 @@ ENV NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS=$NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+RUN npm run build && mkdir -p /app/public
 
 # ── Stage 3: production runner ────────────────────────────────────────────────
 FROM node:24-alpine AS runner
