@@ -54,6 +54,8 @@ ENV NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO=$NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO
 ENV NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS=$NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS
 
 ENV NEXT_TELEMETRY_DISABLED=1
+# Raise Node.js heap limit so tsc doesn't SIGSEGV on large codebases
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 RUN npm run build && mkdir -p /app/public
 
