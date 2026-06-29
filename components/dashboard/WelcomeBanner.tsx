@@ -1,7 +1,7 @@
 import { Sparkles, Building2, CalendarDays, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
-import { PLAN_NAMES } from "@/lib/plans";
+import { PLAN_NAMES, getPlanLimits } from "@/lib/plans";
 import type { OrgPlan } from "@/types/database";
 
 interface Props {
@@ -46,7 +46,7 @@ export async function WelcomeBanner({ orgId, userId }: Props) {
   const firstName = (profile?.full_name ?? "there").split(" ")[0];
   const orgName   = org?.name ?? "Your Organization";
   const plan      = (org?.plan ?? "free") as OrgPlan;
-  const aiMonthLimit = plan === "pro" ? 1000 : plan === "business" ? Infinity : 50;
+  const aiMonthLimit = getPlanLimits(plan).monthlyAICalls;
   const aiUsedToday  = aiToday  ?? 0;
   const aiUsedMonth  = aiMonth  ?? 0;
 
@@ -60,7 +60,7 @@ export async function WelcomeBanner({ orgId, userId }: Props) {
         {/* Left: greeting */}
         <div>
           <p className="text-white/70 text-sm font-medium">{getGreeting()}</p>
-          <h1 className="text-2xl font-bold mt-0.5">{firstName} 👋</h1>
+          <h1 className="text-2xl font-bold mt-0.5 text-white">{firstName} 👋</h1>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-white/80">
             <span className="flex items-center gap-1.5">
               <CalendarDays size={13} className="opacity-70" />

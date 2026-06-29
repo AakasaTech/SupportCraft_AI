@@ -1,7 +1,7 @@
 import { NextResponse }        from "next/server";
 import { createClient }        from "@/lib/supabase/server";
 import { improveText }         from "@/lib/ai/services/improve";
-import { checkAILimits }       from "@/lib/ai/usage";
+import { checkAIAccess }       from "@/lib/ai/usage";
 import type { ImprovementAction } from "@/lib/ai/types";
 
 const VALID_ACTIONS: ImprovementAction[] = ["improve", "shorten", "expand", "formalize", "simplify", "translate"];
@@ -19,9 +19,9 @@ export async function POST(request: Request) {
     .from("organizations").select("plan").eq("id", profile.org_id).single();
   if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
 
-  const { allowed } = await checkAILimits(profile.org_id, org.plan);
+  const { allowed, reason } = await checkAIAccess(profile.org_id, org.plan, "ai_improve");
   if (!allowed) {
-    return NextResponse.json({ error: "Monthly AI usage limit reached." }, { status: 429 });
+    return NextResponse.json({ error: reason }, { status: 429 });
   }
 
   const body = await request.json();

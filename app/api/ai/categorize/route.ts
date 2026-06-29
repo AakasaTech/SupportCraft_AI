@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateCompletion } from "@/lib/ai";
-import { canUseAI } from "@/lib/plans";
+import { checkAIAccess } from "@/lib/ai/usage";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -27,16 +27,9 @@ export async function POST(request: Request) {
     .eq("id", profile.org_id)
     .single();
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const { count: monthlyUsage } = await supabase
-    .from("ai_usage_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", profile.org_id)
-    .gte("created_at", startOfMonth);
-
-  if (!org || !canUseAI(org.plan, monthlyUsage ?? 0)) {
-    return NextResponse.json({ error: "AI usage limit reached" }, { status: 429 });
+  const { allowed, reason } = await checkAIAccess(profile.org_id, org.plan, "ai_auto_categorize");
+  if (!allowed) {
+    return NextResponse.json({ error: reason }, { status: 429 });
   }
 
   const body = await request.json();

@@ -2,15 +2,23 @@ name = "supportcraft-email-inbound"
 main = "index.ts"
 compatibility_date = "2025-01-01"
 
-[[routes]]
-pattern = "*@supportcraft.aakasa.dev"
+# ── Email routing ──────────────────────────────────────────────────────────────
+# Email Worker routing is NOT configured here.
+# Set it in: Cloudflare Dashboard → <your zone> → Email → Email Routing
+#   → Routing rules → Catch-all → Action: Send to a Worker
+#   → select "supportcraft-email-inbound"
+# ──────────────────────────────────────────────────────────────────────────────
 
 [vars]
-SUPABASE_INBOUND_URL = "https://<project-ref>.supabase.co/functions/v1/email-inbound"
+# Replace <project-ref> with your Supabase project reference (Settings → API → Project URL)
+SUPABASE_INBOUND_URL = "https://fkobprkmycdbnbzkwhwm.supabase.co/functions/v1/email-inbound"
 
 [[kv_namespaces]]
 binding = "TENANT_MAP"
-id = "<kv-namespace-id>"
+# Create with: wrangler kv namespace create TENANT_MAP
+# Paste the "id" from the output below:
+id = "6ed261c9df5d41a1b3c0e041213d751c"
 
-# Secrets (set via: wrangler secret put INBOUND_SECRET)
-# INBOUND_SECRET = "<strong-random-32-byte-secret>"
+# ── Secrets — NEVER put real values here, use the CLI: ────────────────────────
+#   wrangler secret put INBOUND_SECRET
+#   (must match INBOUND_SECRET in your .env.production)

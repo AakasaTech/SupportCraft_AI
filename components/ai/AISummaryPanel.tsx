@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { AIBadge } from "./AIBadge";
 import { cn } from "@/lib/utils";
+import type { OrgPlan } from "@/types/database";
 
 interface AISummaryPanelProps {
   summary: string;
@@ -106,12 +107,12 @@ export function AISuggestionCard({
 interface AIUsageMeterProps {
   used: number;
   limit: number;
-  plan: "free" | "pro" | "business";
+  plan: OrgPlan;
   className?: string;
 }
 
 export function AIUsageMeter({ used, limit, plan, className }: AIUsageMeterProps) {
-  const isUnlimited = plan === "business";
+  const isUnlimited = limit === Infinity;
   const pct = isUnlimited ? 0 : Math.min((used / limit) * 100, 100);
   const isWarning = pct > 75;
   const isDanger  = pct > 90;

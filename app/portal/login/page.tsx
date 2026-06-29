@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { PortalLoginForm } from "./PortalLoginForm";
 
@@ -7,6 +8,9 @@ export const metadata: Metadata = { title: "Sign in to Support Portal" };
 export default function PortalLoginPage() {
   return (
     <div className="max-w-sm mx-auto">
+      <div className="mb-8 text-center">
+        <Image src="/logo.png" alt="SupportCraft AI" width={320} height={90} priority className="mx-auto" />
+      </div>
       <div className="sc-glass rounded-2xl p-8 shadow-xl space-y-6">
         <div>
           <h1 className="text-xl font-bold">Sign in to get support</h1>

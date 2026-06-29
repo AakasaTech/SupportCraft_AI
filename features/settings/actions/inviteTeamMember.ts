@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { sendInvitationEmail } from "@/lib/resend";
 import { inviteTeamMemberSchema } from "../schemas";
+import { canAddAgent, getPlanLimits, PLAN_NAMES } from "@/lib/plans";
+import type { OrgPlan } from "@/types/database";
 
 export async function inviteTeamMember(formData: FormData) {
   const supabase = await createClient();
@@ -28,10 +30,19 @@ export async function inviteTeamMember(formData: FormData) {
 
   if (!org) return { error: "Organization not found" };
 
-  const { data: members } = await supabase
+  const { data: members, count: memberCount } = await supabase
     .from("profiles")
     .select("id", { count: "exact" })
     .eq("org_id", profile.org_id);
+
+  const currentAgentCount = memberCount ?? members?.length ?? 0;
+  if (!canAddAgent(org.plan as OrgPlan, currentAgentCount)) {
+    const limit = getPlanLimits(org.plan as OrgPlan).agents;
+    const planName = PLAN_NAMES[org.plan as OrgPlan];
+    return {
+      error: `Your ${planName} plan allows a maximum of ${limit} agent${limit === 1 ? "" : "s"}. Upgrade your plan to add more team members.`,
+    };
+  }
 
   const parsed = inviteTeamMemberSchema.safeParse({
     email: formData.get("email"),

@@ -9,6 +9,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://fkobprkmycdbnbzkwhwm.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2JwcmtteWNkYm5iemt3aHdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzOTY2MjksImV4cCI6MjA5Nzk3MjYyOX0.1pdcxKWrwjcA1dckVxIV7TcDxl3PjOf5_u8WoSanBD8
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrb2JwcmtteWNkYm5iemt3aHdtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjM5NjYyOSwiZXhwIjoyMDk3OTcyNjI5fQ.gD8UPEpNbMr5-hecDsPUJABUij2lJchFCzAMlJEZlo8
 
+# ── Inbound Email (Cloudflare Worker → Supabase Edge Function → App) ──────────
+# Shared secret between Cloudflare Worker, Supabase Edge Function, and this app
+INBOUND_SECRET=42c10eba6dca8a53837b0f7b9d6ef012039d0baecf7fd1e757b89881ed965be5
+
 # AI Provider
 # Set to "openai" or "anthropic"
 AI_PROVIDER=openai
@@ -30,10 +34,19 @@ PAYPAL_CLIENT_ID=ARf81xjokXCKWDGo9AyrhNgbTq1hgj6uoA6RAoR24rl0oxeqoWq9eZaHze8qRFv
 PAYPAL_CLIENT_SECRET=EDg-XOUbCTvWalMNOIapAzvvhJSlyrNg8xBc2WL3510a0e1HHBnBUpsuenA9EvB-2T_DTrzIjGIreTSw
 NEXT_PUBLIC_PAYPAL_CLIENT_ID=ARf81xjokXCKWDGo9AyrhNgbTq1hgj6uoA6RAoR24rl0oxeqoWq9eZaHze8qRFv90fu94Lo9vaR4laRB
 PAYPAL_WEBHOOK_ID=your-webhook-id
-PAYPAL_PLAN_ID_PRO=your-pro-plan-id
-PAYPAL_PLAN_ID_BUSINESS=your-business-plan-id
-NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO=your-pro-plan-id
-NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS=your-business-plan-id
+
+# Subscription plan IDs — create one per tier in PayPal Developer Dashboard
+# Monthly plans
+NEXT_PUBLIC_PAYPAL_PLAN_ID_FREELANCER_MONTHLY=your-freelancer-monthly-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO=your-startup-monthly-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS=your-business-monthly-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_AGENCY=your-agency-monthly-plan-id
+# Yearly plans
+NEXT_PUBLIC_PAYPAL_PLAN_ID_FREELANCER_YEARLY=your-freelancer-yearly-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO_YEARLY=your-startup-yearly-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS_YEARLY=your-business-yearly-plan-id
+NEXT_PUBLIC_PAYPAL_PLAN_ID_AGENCY_YEARLY=your-agency-yearly-plan-id
+
 
 # App URL
 NEXT_PUBLIC_APP_URL=http://localhost:3002
@@ -44,3 +57,6 @@ GMAIL_CLIENT_ID=419756706827-ubf2djt62lq2k46p9cmf4atcpi81dgb1.apps.googleusercon
 GMAIL_CLIENT_SECRET=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
 GMAIL_REFRESH_TOKEN=1//0gYpE2jxK_tlhCgYIARAAGBASNwF-L9IrIMnzNSkiKABE2SgJXHBwp7Ei16BURlz49_6M66yPza2pr49-B15IXK6C6S7HOweQIQE
 EMAIL_FROM=supportcraft@aakasa.dev
+
+
+ADMIN_EMAILS=brayan@aakasa.dev

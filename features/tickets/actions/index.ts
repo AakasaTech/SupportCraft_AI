@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth/helpers";
 import { logAuditEvent } from "@/lib/audit";
 import { sendNewTicketEmail, sendTicketReplyEmail } from "@/lib/resend";
+import { getPlanLimits } from "@/lib/plans";
+import type { OrgPlan } from "@/types/database";
 import {
   createTicketSchema,
   updateTicketSchema,
@@ -34,6 +36,26 @@ export async function createTicket(formData: FormData) {
     .eq("id", user.id)
     .single();
   if (!profile) return { error: "Profile not found" };
+
+  // Enforce monthly ticket limit for the Free plan
+  const { data: org } = await supabase
+    .from("organizations").select("plan").eq("id", profile.org_id).single();
+  if (org) {
+    const limits = getPlanLimits(org.plan as OrgPlan);
+    if (limits.tickets !== Infinity) {
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const { count } = await supabase
+        .from("tickets")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", profile.org_id)
+        .gte("created_at", startOfMonth);
+      if ((count ?? 0) >= limits.tickets) {
+        return {
+          error: `Your Free plan allows ${limits.tickets} tickets per month. Upgrade to create more.`,
+        };
+      }
+    }
+  }
 
   const tagsRaw = formData.get("tags") as string;
   const parsed = createTicketSchema.safeParse({

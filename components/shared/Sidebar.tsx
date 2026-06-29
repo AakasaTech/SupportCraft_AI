@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -55,9 +56,7 @@ export function Sidebar({ profile, organization }: SidebarProps) {
       >
         {/* Logo / Org */}
         <div className="flex items-center gap-3 px-3 py-4 border-b border-sidebar-border">
-          <div className="h-8 w-8 sc-gradient-primary rounded-lg flex items-center justify-center shrink-0 elevation-low">
-            <Sparkles className="h-4 w-4 text-white" aria-hidden />
-          </div>
+          <Image src="/app_icon.png" alt="SupportCraft AI" width={32} height={32} className="rounded-lg shrink-0 elevation-low" />
           <div className="hidden lg:block min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">
               {organization.name}

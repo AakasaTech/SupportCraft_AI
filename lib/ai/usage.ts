@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { canUseAI } from "@/lib/plans";
+import { canUseAI, canUseFeature, featureRequiresPlan } from "@/lib/plans";
 import type { OrgPlan } from "@/types/database";
+import type { PlanFeature } from "@/lib/plans";
 import type { AIUsageRecord, AIProvider } from "./types";
 
 // Cost per 1M tokens in USD
@@ -22,6 +23,28 @@ export function estimateCost(
     (promptTokens     / 1_000_000) * rates.input +
     (completionTokens / 1_000_000) * rates.output
   );
+}
+
+/**
+ * Checks both plan-tier feature access and monthly quota in one call.
+ * Returns { allowed: false, reason } when either gate fails.
+ */
+export async function checkAIAccess(
+  orgId:   string,
+  plan:    string | OrgPlan,
+  feature: PlanFeature
+): Promise<{ allowed: boolean; reason?: string; usage?: number }> {
+  if (!canUseFeature(plan as OrgPlan, feature)) {
+    return {
+      allowed: false,
+      reason:  `This feature requires the ${featureRequiresPlan(feature)} plan or higher.`,
+    };
+  }
+  const { allowed, usage } = await checkAILimits(orgId, plan);
+  if (!allowed) {
+    return { allowed: false, reason: "Monthly AI usage limit reached. Upgrade your plan.", usage };
+  }
+  return { allowed: true, usage };
 }
 
 export async function checkAILimits(

@@ -1,17 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { isAdminEmail } from "@/lib/admin-auth";
 
 // Agent app auth routes (unauthenticated access only)
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/update-password", "/verify-email"];
 
 // Routes that anyone can access
-const PUBLIC_ROUTES = ["/", "/auth/callback"];
+const PUBLIC_ROUTES = ["/", "/auth/callback", "/privacy", "/terms"];
 
 // Portal-specific public routes (unauthenticated portal visitors)
 const PORTAL_PUBLIC_ROUTES = ["/portal/login"];
 
 // Error pages accessible without auth
 const ERROR_ROUTES = ["/unauthorized", "/invitation-expired", "/invitation-invalid"];
+
+// Admin routes — requires both auth + admin email check (done in layout)
+const ADMIN_ROUTES = ["/admin"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -24,6 +28,7 @@ export async function middleware(request: NextRequest) {
   const isPortalRoute = pathname.startsWith("/portal");
   const isPortalPublicRoute = PORTAL_PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
   const isErrorRoute = ERROR_ROUTES.some((r) => pathname.startsWith(r));
+  const isAdminRoute = ADMIN_ROUTES.some((r) => pathname.startsWith(r));
 
   // Always pass through: API, public pages, error pages
   if (isApiRoute || isPublicRoute || isErrorRoute) {
@@ -40,6 +45,17 @@ export async function middleware(request: NextRequest) {
     if (isPortalPublicRoute) return supabaseResponse;
     if (!user) {
       return NextResponse.redirect(new URL("/portal/login", request.url));
+    }
+    return supabaseResponse;
+  }
+
+  // Admin routes — must be authenticated + admin email
+  if (isAdminRoute) {
+    if (!user) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    if (!user.email || !isAdminEmail(user.email)) {
+      return NextResponse.redirect(new URL("/unauthorized", request.url));
     }
     return supabaseResponse;
   }

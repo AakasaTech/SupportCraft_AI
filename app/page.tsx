@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -19,6 +20,7 @@ import {
   Zap,
   CheckCircle2,
 } from "lucide-react";
+import { PricingSection } from "@/components/shared/PricingSection";
 
 export const metadata: Metadata = {
   title: "SupportCraft AI — AI-Powered Help Desk Software",
@@ -90,73 +92,6 @@ const features = [
   },
 ];
 
-// ─── Pricing ──────────────────────────────────────────────────────────────────
-
-const plans = [
-  {
-    name:        "Free",
-    price:       "$0",
-    period:      "forever",
-    annual:      null,
-    description: "Perfect for small teams just getting started.",
-    features: [
-      "3 agents",
-      "50 AI replies / month",
-      "Ticket management",
-      "Customer portal",
-      "Email notifications",
-      "Community support",
-    ],
-    cta:         "Get started free",
-    href:        "/register",
-    highlighted: false,
-    badge:       null,
-  },
-  {
-    name:        "Pro",
-    price:       "$49",
-    period:      "per month",
-    annual:      "$490 / year — save 17%",
-    description: "For growing support teams that live in their queue.",
-    features: [
-      "10 agents",
-      "1,000 AI replies / month",
-      "Everything in Free",
-      "AI reply drafts & summarization",
-      "Knowledge base (unlimited articles)",
-      "CSAT surveys",
-      "SLA tracking",
-      "Priority & category auto-tagging",
-      "Advanced analytics",
-      "Email & chat support",
-    ],
-    cta:         "Start free trial",
-    href:        "/register",
-    highlighted: true,
-    badge:       "Most popular",
-  },
-  {
-    name:        "Business",
-    price:       "$129",
-    period:      "per month",
-    annual:      "$1,290 / year — save 17%",
-    description: "Enterprise-ready for high-volume teams.",
-    features: [
-      "Unlimited agents",
-      "Unlimited AI replies",
-      "Everything in Pro",
-      "Custom branding & white-label portal",
-      "API access",
-      "Audit logs",
-      "SSO / OAuth",
-      "Dedicated success manager",
-    ],
-    cta:         "Contact sales",
-    href:        "/register",
-    highlighted: false,
-    badge:       null,
-  },
-];
 
 // ─── Ticket list for hero mockup ──────────────────────────────────────────────
 
@@ -182,11 +117,8 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/90 backdrop-blur-md">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg sc-gradient-primary">
-              <span className="text-sm font-bold text-white">SC</span>
-            </div>
-            <span className="font-semibold text-base">SupportCraft AI</span>
+          <Link href="/">
+            <Image src="/logo.png" alt="SupportCraft AI" width={340} height={96} priority />
           </Link>
 
           {/* Nav links */}
@@ -528,85 +460,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── Pricing ──────────────────────────────────────────────────────────── */}
-        <section id="pricing" className="border-t border-border bg-muted/30 px-6 py-24">
-          <div className="mx-auto max-w-7xl">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Simple, transparent pricing
-              </h2>
-              <p className="mt-4 text-muted-foreground">
-                Start free forever. Upgrade when your team is ready.
-              </p>
-            </div>
-            <div className="mt-16 grid gap-6 sm:grid-cols-3">
-              {plans.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`relative flex flex-col rounded-2xl border p-8 ${
-                    plan.highlighted
-                      ? "border-primary shadow-2xl scale-105"
-                      : "border-border bg-card"
-                  }`}
-                  style={plan.highlighted ? {
-                    background: "linear-gradient(135deg, oklch(0.42 0.18 264) 0%, oklch(0.52 0.22 280) 100%)",
-                    color:      "oklch(0.99 0 0)",
-                  } : undefined}
-                >
-                  {plan.badge && (
-                    <div
-                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full px-4 py-0.5 text-xs font-semibold"
-                      style={{
-                        background: "oklch(0.99 0 0)",
-                        color:      "oklch(0.42 0.18 264)",
-                      }}
-                    >
-                      {plan.badge}
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="text-lg font-semibold">{plan.name}</h3>
-                    <div className="mt-4 flex items-baseline gap-1">
-                      <span className="text-4xl font-bold">{plan.price}</span>
-                      <span className={`text-sm ${plan.highlighted ? "opacity-70" : "text-muted-foreground"}`}>
-                        / {plan.period}
-                      </span>
-                    </div>
-                    {plan.annual && (
-                      <p className={`mt-1 text-xs ${plan.highlighted ? "opacity-60" : "text-muted-foreground"}`}>
-                        or {plan.annual}
-                      </p>
-                    )}
-                    <p className={`mt-2 text-sm ${plan.highlighted ? "opacity-80" : "text-muted-foreground"}`}>
-                      {plan.description}
-                    </p>
-                  </div>
-                  <ul className="mt-8 flex-1 space-y-3">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5 text-sm">
-                        <Check className={`mt-0.5 h-4 w-4 shrink-0 ${plan.highlighted ? "opacity-90" : "text-primary"}`} />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    href={plan.href}
-                    className={`mt-8 block rounded-xl px-6 py-3 text-center text-sm font-semibold transition-all ${
-                      plan.highlighted
-                        ? "bg-white hover:bg-white/90"
-                        : "sc-btn-primary"
-                    }`}
-                    style={plan.highlighted ? { color: "oklch(0.42 0.18 264)" } : undefined}
-                  >
-                    {plan.cta}
-                  </Link>
-                </div>
-              ))}
-            </div>
-            <p className="mt-8 text-center text-xs text-muted-foreground">
-              All paid plans include a 14-day free trial. No credit card required. Cancel anytime.
-            </p>
-          </div>
-        </section>
+        <PricingSection />
 
         {/* ── CTA strip ────────────────────────────────────────────────────────── */}
         <section className="border-t border-border px-6 py-20 text-center">
@@ -640,9 +494,7 @@ export default function LandingPage() {
       <footer className="border-t border-border px-6 py-10">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 sm:flex-row">
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md sc-gradient-primary">
-              <span className="text-xs font-bold text-white">SC</span>
-            </div>
+            <Image src="/app_icon.png" alt="SupportCraft AI" width={28} height={28} className="rounded-md" />
             <span className="text-sm font-semibold">SupportCraft AI</span>
             <span className="text-xs text-muted-foreground">by Aakasa Digital</span>
           </Link>
