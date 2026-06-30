@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import { isAdminEmail } from "@/lib/admin-auth";
+import { isAdminEmail } from "@/lib/is-admin-email";
 
 // Agent app auth routes (unauthenticated access only)
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/update-password", "/verify-email"];

@@ -1,12 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/is-admin-email";
 
-export function isAdminEmail(email: string): boolean {
-  const adminEmails = (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return adminEmails.includes(email.toLowerCase());
-}
+export { isAdminEmail };
 
 /** Throws a redirect-safe error if the caller is not an admin. */
 export async function verifyAdmin(): Promise<{ email: string; userId: string }> {

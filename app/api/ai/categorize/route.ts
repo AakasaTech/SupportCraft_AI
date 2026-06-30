@@ -27,6 +27,8 @@ export async function POST(request: Request) {
     .eq("id", profile.org_id)
     .single();
 
+  if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+
   const { allowed, reason } = await checkAIAccess(profile.org_id, org.plan, "ai_auto_categorize");
   if (!allowed) {
     return NextResponse.json({ error: reason }, { status: 429 });

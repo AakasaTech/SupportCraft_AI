@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { isAdminEmail } from "@/lib/admin-auth";
+import { isAdminEmail } from "@/lib/is-admin-email";
 import { LayoutDashboard, Building2, Users, LogOut, ShieldCheck } from "lucide-react";
 
 const NAV = [
