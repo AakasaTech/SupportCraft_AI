@@ -4,16 +4,20 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/utils";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
 
+  // Use NEXT_PUBLIC_APP_URL (baked at build time) so redirects go to the
+  // public hostname rather than the internal Docker bind address (0.0.0.0).
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+
   if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+    return NextResponse.redirect(`${appUrl}/login?error=auth_callback_failed`);
   }
 
   // Build the redirect response first so we can write session cookies onto it.
-  const redirectUrl = new URL(`${origin}${next}`);
+  const redirectUrl = new URL(`${appUrl}${next}`);
   const response = NextResponse.redirect(redirectUrl);
 
   // Create a Supabase client whose cookie setter writes directly to the
@@ -39,7 +43,7 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
-    return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+    return NextResponse.redirect(`${appUrl}/login?error=auth_callback_failed`);
   }
 
   // Auto-provision org + profile for new OAuth users
