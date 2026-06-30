@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { slugify } from "@/lib/utils";
 
 export async function GET(request: Request) {
@@ -11,14 +12,37 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
   }
 
-  const supabase = await createClient();
+  // Build the redirect response first so we can write session cookies onto it.
+  const redirectUrl = new URL(`${origin}${next}`);
+  const response = NextResponse.redirect(redirectUrl);
+
+  // Create a Supabase client whose cookie setter writes directly to the
+  // redirect response — this is the only way cookies survive a redirect in
+  // a Next.js Route Handler.
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+          });
+        },
+      },
+    }
+  );
+
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
   }
 
-  // After code exchange, check if this is a new OAuth user (no profile yet)
+  // Auto-provision org + profile for new OAuth users
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -30,7 +54,6 @@ export async function GET(request: Request) {
         .single();
 
       if (!existingProfile) {
-        // New OAuth user — create a default org + profile
         const fullName =
           user.user_metadata?.full_name ??
           user.user_metadata?.name ??
@@ -48,25 +71,25 @@ export async function GET(request: Request) {
 
         if (org) {
           await admin.from("profiles").insert({
-            id: user.id,
-            org_id: org.id,
-            role: "owner",
-            full_name: fullName,
-            email: user.email ?? "",
+            id:         user.id,
+            org_id:     org.id,
+            role:       "owner",
+            full_name:  fullName,
+            email:      user.email ?? "",
             avatar_url: user.user_metadata?.avatar_url ?? null,
           });
 
           await admin.from("subscriptions").insert({
             org_id: org.id,
-            plan: "free",
+            plan:   "free",
             status: "active",
           });
         }
       }
     }
   } catch {
-    // Non-fatal — user may have an existing profile, or race condition
+    // Non-fatal — existing user or race condition
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return response;
 }
