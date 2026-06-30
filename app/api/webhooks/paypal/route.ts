@@ -85,7 +85,22 @@ export async function POST(request: Request) {
 
 function getPlanFromSubscription(resource: { plan_id?: string }): "free" | "pro" | "business" {
   const planId = resource.plan_id;
-  if (planId === process.env.PAYPAL_PLAN_ID_BUSINESS) return "business";
-  if (planId === process.env.PAYPAL_PLAN_ID_PRO) return "pro";
+
+  const businessIds = [
+    process.env.PAYPAL_PLAN_ID_BUSINESS,
+    process.env.PAYPAL_PLAN_ID_BUSINESS_YEARLY,
+    process.env.PAYPAL_PLAN_ID_AGENCY,
+    process.env.PAYPAL_PLAN_ID_AGENCY_YEARLY,
+  ];
+
+  const proIds = [
+    process.env.PAYPAL_PLAN_ID_PRO,
+    process.env.PAYPAL_PLAN_ID_PRO_YEARLY,
+    process.env.PAYPAL_PLAN_ID_FREELANCER_MONTHLY,
+    process.env.PAYPAL_PLAN_ID_FREELANCER_YEARLY,
+  ];
+
+  if (businessIds.includes(planId)) return "business";
+  if (proIds.includes(planId)) return "pro";
   return "free";
 }
