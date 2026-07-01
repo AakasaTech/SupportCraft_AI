@@ -127,6 +127,7 @@ export default function LandingPage() {
             <Link href="#features"      className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link>
             <Link href="#how-it-works"  className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</Link>
             <Link href="#pricing"       className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
+            <Link href="/privacy"       className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link>
             <Link href="/portal/login"  className="text-sm text-muted-foreground hover:text-foreground transition-colors">Support portal</Link>
           </div>
 
@@ -535,8 +536,8 @@ export default function LandingPage() {
           </p>
           <div className="flex gap-6 text-xs text-muted-foreground">
             <Link href="/portal/login" className="hover:text-foreground transition-colors">Customer portal</Link>
-            <Link href="/privacy"      className="hover:text-foreground transition-colors">Privacy</Link>
-            <Link href="/terms"        className="hover:text-foreground transition-colors">Terms</Link>
+            <Link href="/privacy"      className="hover:text-foreground transition-colors">Privacy Policy</Link>
+            <Link href="/terms"        className="hover:text-foreground transition-colors">Terms of Service</Link>
           </div>
         </div>
       </footer>
