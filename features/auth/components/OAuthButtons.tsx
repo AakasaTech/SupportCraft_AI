@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { signInWithOAuth } from "../actions";
+import { signInWithGoogleAction, signInWithOAuth } from "../actions";
 
 function GoogleIcon() {
   return (
@@ -41,14 +41,13 @@ function MicrosoftIcon() {
 }
 
 export function OAuthButtons() {
-  const [isPendingGoogle, startGoogle] = useTransition();
+  const [isPendingGoogle,    startGoogle]    = useTransition();
   const [isPendingMicrosoft, startMicrosoft] = useTransition();
   const router = useRouter();
 
-  async function handleOAuth(provider: "google" | "azure") {
-    const result = await signInWithOAuth(provider);
+  async function handleMicrosoft() {
+    const result = await signInWithOAuth("azure");
     if (result?.error) {
-      // Surface error via URL so the parent form can show it
       router.push(`?error=${encodeURIComponent(result.error)}`);
       return;
     }
@@ -64,7 +63,7 @@ export function OAuthButtons() {
         variant="outline"
         className="w-full gap-2"
         disabled={isPendingGoogle || isPendingMicrosoft}
-        onClick={() => startGoogle(() => handleOAuth("google"))}
+        onClick={() => startGoogle(() => signInWithGoogleAction())}
       >
         {isPendingGoogle ? <Loader2 size={18} className="animate-spin" /> : <GoogleIcon />}
         Continue with Google
@@ -75,7 +74,7 @@ export function OAuthButtons() {
         variant="outline"
         className="w-full gap-2"
         disabled={isPendingGoogle || isPendingMicrosoft}
-        onClick={() => startMicrosoft(() => handleOAuth("azure"))}
+        onClick={() => startMicrosoft(() => handleMicrosoft())}
       >
         {isPendingMicrosoft ? <Loader2 size={18} className="animate-spin" /> : <MicrosoftIcon />}
         Continue with Microsoft

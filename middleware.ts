@@ -6,7 +6,7 @@ import { isAdminEmail } from "@/lib/is-admin-email";
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/update-password", "/verify-email"];
 
 // Routes that anyone can access
-const PUBLIC_ROUTES = ["/", "/auth/callback", "/privacy", "/terms"];
+const PUBLIC_ROUTES = ["/", "/auth/callback", "/auth/google/callback", "/privacy", "/terms"];
 
 // Portal-specific public routes (unauthenticated portal visitors)
 const PORTAL_PUBLIC_ROUTES = ["/portal/login"];

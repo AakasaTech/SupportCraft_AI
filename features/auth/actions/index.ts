@@ -137,7 +137,13 @@ export async function resetPassword(formData: FormData) {
   return { success: "Check your email for the password reset link" };
 }
 
-export async function signInWithOAuth(provider: "google" | "azure") {
+// Custom Google flow: redirects to /api/auth/google which uses PKCE + nonce,
+// showing supportcraft.aakasa.dev on Google's account chooser instead of Supabase's domain.
+export async function signInWithGoogleAction() {
+  redirect("/api/auth/google");
+}
+
+export async function signInWithOAuth(provider: "azure") {
   const supabase = await createClient();
 
   try {
@@ -145,7 +151,7 @@ export async function signInWithOAuth(provider: "google" | "azure") {
       provider,
       options: {
         redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-        scopes: provider === "azure" ? "openid profile email" : undefined,
+        scopes: "openid profile email",
       },
     });
 
