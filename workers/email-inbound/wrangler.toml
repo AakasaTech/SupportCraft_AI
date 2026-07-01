@@ -10,15 +10,9 @@ compatibility_date = "2025-01-01"
 # ──────────────────────────────────────────────────────────────────────────────
 
 [vars]
-# Replace <project-ref> with your Supabase project reference (Settings → API → Project URL)
 SUPABASE_INBOUND_URL = "https://fkobprkmycdbnbzkwhwm.supabase.co/functions/v1/email-inbound"
+SUPABASE_URL         = "https://fkobprkmycdbnbzkwhwm.supabase.co"
 
-[[kv_namespaces]]
-binding = "TENANT_MAP"
-# Create with: wrangler kv namespace create TENANT_MAP
-# Paste the "id" from the output below:
-id = "6ed261c9df5d41a1b3c0e041213d751c"
-
-# ── Secrets — NEVER put real values here, use the CLI: ────────────────────────
+# ── Secrets — set via CLI, NEVER put real values here: ────────────────────────
 #   wrangler secret put INBOUND_SECRET
-#   (must match INBOUND_SECRET in your .env.production)
+#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY

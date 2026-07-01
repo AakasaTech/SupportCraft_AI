@@ -175,28 +175,42 @@ CREATE OR REPLACE FUNCTION current_org_id() RETURNS uuid AS $$
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- email_settings
+DROP POLICY IF EXISTS email_settings_select ON email_settings;
+DROP POLICY IF EXISTS email_settings_update ON email_settings;
+DROP POLICY IF EXISTS email_settings_insert ON email_settings;
 CREATE POLICY email_settings_select ON email_settings FOR SELECT USING (org_id = current_org_id());
 CREATE POLICY email_settings_update ON email_settings FOR UPDATE USING (org_id = current_org_id());
 CREATE POLICY email_settings_insert ON email_settings FOR INSERT WITH CHECK (org_id = current_org_id());
 
 -- email_messages
+DROP POLICY IF EXISTS email_messages_select ON email_messages;
+DROP POLICY IF EXISTS email_messages_insert ON email_messages;
+DROP POLICY IF EXISTS email_messages_update ON email_messages;
 CREATE POLICY email_messages_select ON email_messages FOR SELECT USING (org_id = current_org_id());
 CREATE POLICY email_messages_insert ON email_messages FOR INSERT WITH CHECK (org_id = current_org_id());
 CREATE POLICY email_messages_update ON email_messages FOR UPDATE USING (org_id = current_org_id());
 
 -- email_delivery_events (via message ownership)
+DROP POLICY IF EXISTS email_delivery_select ON email_delivery_events;
 CREATE POLICY email_delivery_select ON email_delivery_events FOR SELECT
   USING (email_message_id IN (SELECT id FROM email_messages WHERE org_id = current_org_id()));
 
 -- email_attachments
+DROP POLICY IF EXISTS email_attachments_select ON email_attachments;
+DROP POLICY IF EXISTS email_attachments_insert ON email_attachments;
 CREATE POLICY email_attachments_select ON email_attachments FOR SELECT USING (org_id = current_org_id());
 CREATE POLICY email_attachments_insert ON email_attachments FOR INSERT WITH CHECK (org_id = current_org_id());
 
 -- email_queue
+DROP POLICY IF EXISTS email_queue_select ON email_queue;
+DROP POLICY IF EXISTS email_queue_insert ON email_queue;
 CREATE POLICY email_queue_select ON email_queue FOR SELECT USING (org_id = current_org_id());
 CREATE POLICY email_queue_insert ON email_queue FOR INSERT WITH CHECK (org_id = current_org_id());
 
 -- email_templates (system templates visible to all; org templates scoped)
+DROP POLICY IF EXISTS email_templates_select ON email_templates;
+DROP POLICY IF EXISTS email_templates_insert ON email_templates;
+DROP POLICY IF EXISTS email_templates_update ON email_templates;
 CREATE POLICY email_templates_select ON email_templates FOR SELECT
   USING (is_system = true OR org_id = current_org_id());
 CREATE POLICY email_templates_insert ON email_templates FOR INSERT
@@ -205,6 +219,7 @@ CREATE POLICY email_templates_update ON email_templates FOR UPDATE
   USING (is_system = false AND org_id = current_org_id());
 
 -- email_raw_inbound (service role only via admin client; agents can read for audit)
+DROP POLICY IF EXISTS email_raw_select ON email_raw_inbound;
 CREATE POLICY email_raw_select ON email_raw_inbound FOR SELECT USING (org_id = current_org_id());
 
 -- ─────────────────────────────────────────────

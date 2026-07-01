@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 interface CreateTicketFromEmailParams {
   orgId:        string;
+  toAddress:    string;
   fromAddress:  string;
   fromName:     string | null;
   subject:      string;
@@ -18,6 +19,7 @@ interface CreateTicketFromEmailParams {
 interface AddReplyToTicketParams {
   ticketId:     string;
   orgId:        string;
+  toAddress:    string;
   fromAddress:  string;
   bodyPlain:    string | null;
   sanitizedHtml: string | null;
@@ -83,7 +85,7 @@ export async function createTicketFromEmail(
       in_reply_to:        params.inReplyTo,
       references:         params.references,
       from_address:       params.fromAddress,
-      to_address:         `${params.orgId}@supportcraft.aakasa.dev`,
+      to_address:         params.toAddress,
       subject:            params.subject,
       body_plain:         params.bodyPlain,
       body_html:          params.bodyHtml,
@@ -137,7 +139,7 @@ export async function addReplyToTicket(
       in_reply_to:        params.inReplyTo,
       references:         params.references,
       from_address:       params.fromAddress,
-      to_address:         `${params.orgId}@supportcraft.aakasa.dev`,
+      to_address:         params.toAddress,
       subject:            "(reply)",
       body_plain:         params.bodyPlain,
       sanitized_body_html: params.sanitizedHtml,

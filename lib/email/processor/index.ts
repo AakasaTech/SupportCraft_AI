@@ -53,6 +53,7 @@ export async function processInboundEmail(
       const result = await addReplyToTicket({
         ticketId:      thread.ticketId,
         orgId:         payload.tenant_id,
+        toAddress:     payload.to_address,
         fromAddress:   payload.from_address,
         bodyPlain:     cleanedPlain,
         sanitizedHtml,
@@ -86,6 +87,7 @@ export async function processInboundEmail(
       // ── Create new ticket ──────────────────────────────────────────────
       const result = await createTicketFromEmail({
         orgId:         payload.tenant_id,
+        toAddress:     payload.to_address,
         fromAddress:   payload.from_address,
         fromName:      payload.from_name,
         subject:       payload.subject,
