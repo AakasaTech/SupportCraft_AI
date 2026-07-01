@@ -142,8 +142,8 @@ export interface TicketReplyEmailParams {
 export async function sendTicketReplyEmail(params: TicketReplyEmailParams) {
   const ticketRef = params.ticketNumber ? `[Ticket #${params.ticketNumber}]` : "";
   const subject   = ticketRef
-    ? `Re: ${ticketRef} ${params.ticketTitle}`
-    : `Re: ${params.ticketTitle}`;
+    ? `${ticketRef} ${params.ticketTitle}`
+    : params.ticketTitle;
 
   const from = params.fromAddress && params.displayName
     ? `${params.displayName} Support <${params.fromAddress}>`

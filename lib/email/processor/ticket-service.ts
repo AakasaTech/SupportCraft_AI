@@ -136,7 +136,7 @@ export async function createTicketFromEmail(
 
     const subject = ackTemplate?.subject
       ? renderVariables(ackTemplate.subject, vars)
-      : `[Ticket #${ticketNum}] We received your request: ${params.subject}`;
+      : `[Ticket #${ticketNum}] ${params.subject}`;
 
     const bodyPlain = ackTemplate?.body_plain
       ? renderVariables(ackTemplate.body_plain, vars)

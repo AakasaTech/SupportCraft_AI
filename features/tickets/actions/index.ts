@@ -316,8 +316,8 @@ export async function replyToTicket(formData: FormData) {
       const fromAddress = emailSettings?.tenant_slug ? getOrgEmail(emailSettings.tenant_slug) : undefined;
       const displayName = emailSettings?.display_name ?? emailSettings?.tenant_slug ?? undefined;
       const replySubject = ticketData.ticket_number
-        ? `Re: [Ticket #${ticketData.ticket_number}] ${ticketData.title}`
-        : `Re: ${ticketData.title}`;
+        ? `[Ticket #${ticketData.ticket_number}] ${ticketData.title}`
+        : ticketData.title;
 
       await sendTicketReplyEmail({
         to:                customer.email,

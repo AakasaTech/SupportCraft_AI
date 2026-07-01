@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { saveAckTemplate, type AckTemplate } from "../actions/emailTemplates";
 
-const DEFAULT_SUBJECT = "[Ticket #{{ticket_number}}] We received your request: {{ticket_subject}}";
+const DEFAULT_SUBJECT = "[Ticket #{{ticket_number}}] {{ticket_subject}}";
 const DEFAULT_BODY = `Hi {{customer_name}},
 
 Thank you for contacting {{organization_name}} Support. We've received your request and created a ticket.
