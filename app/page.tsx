@@ -123,6 +123,7 @@ export default function LandingPage() {
 
           {/* Nav links */}
           <div className="hidden items-center gap-8 md:flex">
+            <Link href="#about"         className="text-sm text-muted-foreground hover:text-foreground transition-colors">About</Link>
             <Link href="#features"      className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link>
             <Link href="#how-it-works"  className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</Link>
             <Link href="#pricing"       className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
@@ -194,8 +195,9 @@ export default function LandingPage() {
 
                 {/* Description */}
                 <p className="mt-6 max-w-[480px] text-lg leading-relaxed text-muted-foreground">
-                  SupportCraft AI gives your team AI-drafted replies, a smart knowledge base, and
-                  real-time analytics — so every customer gets a great answer, fast.
+                  SupportCraft AI is a cloud-based customer support help desk platform for businesses,
+                  agencies, and freelancers. Manage support tickets, collaborate as a team, and use
+                  AI to draft faster replies — all in one place.
                 </p>
 
                 {/* CTAs */}
@@ -375,6 +377,36 @@ export default function LandingPage() {
                 );
               })}
             </div>
+          </div>
+        </section>
+
+        {/* ── About ────────────────────────────────────────────────────────────── */}
+        <section id="about" className="px-6 py-16">
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              What is SupportCraft AI?
+            </h2>
+            <p className="mt-5 text-base leading-relaxed text-muted-foreground">
+              SupportCraft AI is a web-based customer support help desk application that lets
+              businesses and teams manage customer inquiries in one place. Support agents can
+              create and track tickets, reply to customers, collaborate with teammates using
+              internal notes, and publish a self-service knowledge base.
+            </p>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+              The platform uses AI (OpenAI GPT-4o) to automatically categorise incoming tickets
+              by priority and topic, and to generate reply drafts that agents can review and
+              send in seconds. A built-in analytics dashboard tracks response times, ticket
+              volumes, and customer satisfaction scores in real time.
+            </p>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+              Sign-in with Google is offered purely for account authentication — we request only
+              your name and email address and use them solely to create and identify your account.
+              We do not access any other Google data. See our{" "}
+              <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground transition-colors">
+                Privacy Policy
+              </Link>{" "}
+              for full details.
+            </p>
           </div>
         </section>
 
