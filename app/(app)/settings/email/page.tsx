@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { EmailSettingsForm } from "@/components/email/settings/EmailSettingsForm";
 import { getOrgEmail } from "@/lib/email/platform-provider";
+import { AckTemplateForm } from "@/features/settings/components/AckTemplateForm";
+import { getAckTemplate } from "@/features/settings/actions/emailTemplates";
 
 export const metadata: Metadata = { title: "Email Settings | SupportCraft" };
 
@@ -25,7 +27,8 @@ export default async function EmailSettingsPage() {
     .eq("org_id", profile.org_id)
     .single();
 
-  const supportEmail = settings?.tenant_slug ? getOrgEmail(settings.tenant_slug) : null;
+  const supportEmail  = settings?.tenant_slug ? getOrgEmail(settings.tenant_slug) : null;
+  const ackTemplate   = await getAckTemplate();
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -49,6 +52,14 @@ export default async function EmailSettingsPage() {
         initialSettings={settings ?? null}
         initialEmail={supportEmail}
       />
+
+      <div>
+        <h2 className="text-base font-semibold text-foreground mb-1">Email Templates</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Customise the emails SupportCraft sends automatically when tickets are created or updated.
+        </p>
+        <AckTemplateForm initial={ackTemplate} />
+      </div>
 
       {/* Info box */}
       <div className="sc-card p-5 flex gap-3">

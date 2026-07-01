@@ -13,6 +13,7 @@ export interface SendEmailOptions {
   html:         string
   text:         string
   attachments?: EmailAttachment[]
+  headers?:     Record<string, string>
 }
 
 export interface SendEmailResult {
@@ -44,7 +45,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
   const provider = (process.env.EMAIL_PROVIDER ?? 'resend').toLowerCase()
 
   if (provider === 'gmail') {
-    return sendViaGmail(opts)
+    return sendViaGmail({ ...opts, headers: opts.headers })
   }
 
   // Default: Resend
@@ -58,6 +59,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
     html:        opts.html,
     text:        opts.text,
     attachments: opts.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
+    headers:     opts.headers,
   })
 
   if (error) return { error: error.message }

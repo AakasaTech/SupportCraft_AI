@@ -84,18 +84,19 @@ export async function sendNewTicketEmail(params: NewTicketEmailParams) {
 export interface TicketAcknowledgementEmailParams {
   to:           string;
   customerName: string;
-  ticketId:     string;
-  subject:      string;
-  from:         string; // org support address e.g. xbit@supportcraft.aakasa.dev
-  displayName:  string; // org display name
+  ticketNumber: string;  // e.g. SUP-1003
+  subject:      string;  // already rendered (includes ticket number)
+  from:         string;
+  displayName:  string;
+  bodyPlain?:   string;
+  bodyHtml?:    string;
 }
 
 export async function sendTicketAcknowledgementEmail(params: TicketAcknowledgementEmailParams) {
-  const shortId   = params.ticketId.slice(0, 8).toUpperCase();
-  const ticketRef = `[Ticket #${shortId}]`;
+  const ticketRef = `[Ticket #${params.ticketNumber}]`;
   const fromLine  = `${params.displayName} Support <${params.from}>`;
 
-  const html = `
+  const html = params.bodyHtml ?? `
     <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
       <h2 style="color:#1a1a1a;">We received your request</h2>
       <p style="color:#555;">Hi ${params.customerName},</p>
@@ -105,64 +106,71 @@ export async function sendTicketAcknowledgementEmail(params: TicketAcknowledgeme
       <div style="background:#f5f5f5;border-left:4px solid #6d28d9;padding:16px;border-radius:4px;margin:16px 0;">
         <p style="margin:0;color:#333;font-size:13px;">Ticket reference</p>
         <p style="margin:4px 0 0;color:#1a1a1a;font-weight:600;font-size:18px;">${ticketRef}</p>
-        <p style="margin:4px 0 0;color:#555;font-size:13px;">${params.subject}</p>
       </div>
-      <p style="color:#555;">
-        You can reply directly to this email to add more information to your ticket.
-      </p>
+      <p style="color:#555;">You can reply directly to this email to add more information to your ticket.</p>
       <p style="color:#999;font-size:12px;margin-top:24px;">
         Please keep the ticket reference <strong>${ticketRef}</strong> in the subject line when replying.
       </p>
     </div>
   `;
 
-  const text = `Hi ${params.customerName},\n\nThank you for contacting support. We've received your request.\n\nTicket reference: ${ticketRef}\nSubject: ${params.subject}\n\nYou can reply directly to this email to add more information.\n\nPlease keep the reference ${ticketRef} in the subject line when replying.`;
+  const text = params.bodyPlain ??
+    `Hi ${params.customerName},\n\nThank you for contacting support. We've received your request.\n\nTicket reference: ${ticketRef}\n\nYou can reply directly to this email to add more information.\n\nPlease keep the reference ${ticketRef} in the subject line when replying.`;
 
-  await sendEmail({
-    from:    fromLine,
-    to:      params.to,
-    subject: `${ticketRef} We received your request: ${params.subject}`,
-    html,
-    text,
-  });
+  await sendEmail({ from: fromLine, to: params.to, subject: params.subject, html, text });
 }
 
 // ─── Ticket reply (to customer) ───────────────────────────────────────────────
 
 export interface TicketReplyEmailParams {
-  to:            string;
-  customerName:  string;
-  agentName:     string;
-  ticketTitle:   string;
-  replyContent:  string;
-  ticketId:      string;
-  ticketNumber?: string;
+  to:             string;
+  customerName:   string;
+  agentName:      string;
+  ticketTitle:    string;
+  replyContent:   string;
+  ticketId:       string;
+  ticketNumber?:  string;
+  // Org email — defaults to platform email when absent
+  fromAddress?:   string;  // e.g. xbit@supportcraft.aakasa.dev
+  displayName?:   string;  // e.g. "Xbit"
+  // Email threading headers
+  outboundMessageId?: string;  // Message-ID we're sending with (no angle brackets)
+  inReplyTo?:     string;      // message_id of the last email in this thread (no angle brackets)
+  references?:    string[];    // full chain of message_ids (no angle brackets)
 }
 
 export async function sendTicketReplyEmail(params: TicketReplyEmailParams) {
-  const ticketUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/tickets/${params.ticketId}`;
-  const from      = `${APP_NAME} <${getEmailFrom()}>`;
-  const ref       = params.ticketNumber ? ` [${params.ticketNumber}]` : "";
+  const ticketRef = params.ticketNumber ? `[Ticket #${params.ticketNumber}]` : "";
+  const subject   = ticketRef
+    ? `Re: ${ticketRef} ${params.ticketTitle}`
+    : `Re: ${params.ticketTitle}`;
+
+  const from = params.fromAddress && params.displayName
+    ? `${params.displayName} Support <${params.fromAddress}>`
+    : `${APP_NAME} <${getEmailFrom()}>`;
+
+  const headers: Record<string, string> = {};
+  if (params.outboundMessageId) headers["Message-ID"]  = `<${params.outboundMessageId}>`;
+  if (params.inReplyTo)         headers["In-Reply-To"] = `<${params.inReplyTo}>`;
+  if (params.references?.length) {
+    headers["References"] = params.references.map(r => `<${r}>`).join(" ");
+  }
 
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
       <p style="color:#555;">Hi ${params.customerName},</p>
-      <p style="color:#555;">${params.agentName} replied to your support ticket:</p>
+      <p style="color:#555;">${params.agentName} replied to your support ticket ${ticketRef}:</p>
       <div style="background:#f9f9f9;border:1px solid #e0e0e0;padding:16px;border-radius:8px;margin:16px 0;">
         <p style="color:#333;white-space:pre-wrap;margin:0;">${params.replyContent}</p>
       </div>
-      <a href="${ticketUrl}"
-         style="display:inline-block;background:#6d28d9;color:#fff;padding:12px 24px;
-                border-radius:8px;text-decoration:none;font-weight:600;">
-        View Ticket
-      </a>
       <p style="color:#999;font-size:12px;margin-top:24px;">
-        You're receiving this because you submitted a support request.
+        You're receiving this because you submitted a support request.<br>
+        Reply to this email to respond to the ticket.
       </p>
     </div>
   `;
 
-  const text = `Hi ${params.customerName},\n\n${params.agentName} replied to your support ticket:\n\n${params.replyContent}\n\nView ticket: ${ticketUrl}`;
+  const text = `Hi ${params.customerName},\n\n${params.agentName} replied to your support ticket ${ticketRef}:\n\n${params.replyContent}\n\nReply to this email to respond to the ticket.`;
 
-  await sendEmail({ from, to: params.to, subject: `Re: ${params.ticketTitle}${ref}`, html, text });
+  await sendEmail({ from, to: params.to, subject, html, text, headers: Object.keys(headers).length ? headers : undefined });
 }

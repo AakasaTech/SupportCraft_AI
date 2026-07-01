@@ -7,8 +7,8 @@ export interface ThreadDetectionResult {
   method?:    "message_id" | "in_reply_to" | "references" | "subject_token" | "hidden_token";
 }
 
-// Matches [SUP-1234] or [TKT-1234] patterns in subject
-const TICKET_TOKEN_RE = /\[(?:SUP|TKT)-([A-Z0-9]+)\]/i;
+// Matches [Ticket #SUP-1234], [SUP-1234], or [TKT-1234] in subject — extracts the ticket_number
+const TICKET_TOKEN_RE = /\[(?:Ticket\s+#)?([A-Z]+-\d+)\]/i;
 
 // <!-- ticket:uuid --> hidden token in HTML body
 const HIDDEN_TOKEN_RE = /<!--\s*ticket:([0-9a-f-]{36})\s*-->/i;
@@ -37,18 +37,17 @@ export async function detectThread(params: {
     if (ticket) return { ticketId: ticket.id, isReply: true, confidence: "high", method: "hidden_token" };
   }
 
-  // ── 2. Subject token ─────────────────────────────────────────────────────
+  // ── 2. Subject token — [Ticket #SUP-1003] or [SUP-1003] ────────────────
   const subjectMatch = TICKET_TOKEN_RE.exec(params.subject);
   if (subjectMatch) {
-    // Try matching by the short code (sequential id stored in metadata or title search)
-    const { data: tickets } = await admin
+    const { data: ticket } = await admin
       .from("tickets")
-      .select("id, title")
+      .select("id")
       .eq("org_id", params.orgId)
-      .ilike("title", `%${params.subject.replace(TICKET_TOKEN_RE, "").trim().slice(0, 60)}%`)
-      .limit(1);
-    if (tickets?.[0]) {
-      return { ticketId: tickets[0].id, isReply: true, confidence: "medium", method: "subject_token" };
+      .eq("ticket_number", subjectMatch[1].toUpperCase())
+      .single();
+    if (ticket) {
+      return { ticketId: ticket.id, isReply: true, confidence: "high", method: "subject_token" };
     }
   }
 

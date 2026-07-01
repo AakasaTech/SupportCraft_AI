@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth/helpers";
 import { logAuditEvent } from "@/lib/audit";
 import { sendNewTicketEmail, sendTicketReplyEmail } from "@/lib/resend";
+import { getOrgEmail } from "@/lib/email/platform-provider";
 import { getPlanLimits } from "@/lib/plans";
 import type { OrgPlan } from "@/types/database";
 import {
@@ -275,31 +277,79 @@ export async function replyToTicket(formData: FormData) {
   // Email the customer when an agent sends a public reply
   if (!isInternal) {
     try {
-      const { data: ticketData } = await supabase
-        .from("tickets")
-        .select("title, ticket_number, customer:customers!customer_id(name, email)")
-        .eq("id", ticketId)
-        .single();
-      const { data: agentProfile } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .single();
+      const admin = createAdminClient();
+
+      const [
+        { data: ticketData },
+        { data: agentProfile },
+        { data: lastInbound },
+      ] = await Promise.all([
+        supabase
+          .from("tickets")
+          .select("title, ticket_number, org_id, customer:customers!customer_id(name, email)")
+          .eq("id", ticketId)
+          .single(),
+        supabase.from("profiles").select("full_name").eq("id", user.id).single(),
+        admin
+          .from("email_messages")
+          .select("message_id, references")
+          .eq("ticket_id", ticketId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single(),
+      ]);
 
       const customer = ticketData?.customer as { name?: string; email?: string } | null;
-      if (customer?.email) {
-        await sendTicketReplyEmail({
-          to:           customer.email,
-          customerName: customer.name ?? "Customer",
-          agentName:    agentProfile?.full_name ?? "Support Team",
-          ticketTitle:  ticketData?.title ?? "",
-          replyContent: content,
-          ticketId,
-          ticketNumber: ticketData?.ticket_number ?? undefined,
-        });
-      }
-    } catch {
-      // Email failure is non-fatal
+      if (!customer?.email || !ticketData) return { success: true, messageId: msg.id };
+
+      const { data: emailSettings } = await admin
+        .from("email_settings")
+        .select("tenant_slug, display_name")
+        .eq("org_id", ticketData.org_id)
+        .single();
+
+      const outboundMessageId = `reply-${ticketId}-${Date.now()}@supportcraft.aakasa.dev`;
+      const prevRefs: string[] = Array.isArray(lastInbound?.references) ? lastInbound.references : [];
+      const inReplyToId = lastInbound?.message_id ?? undefined;
+      const references  = inReplyToId ? [...prevRefs, inReplyToId] : prevRefs;
+
+      const fromAddress = emailSettings?.tenant_slug ? getOrgEmail(emailSettings.tenant_slug) : undefined;
+      const displayName = emailSettings?.display_name ?? emailSettings?.tenant_slug ?? undefined;
+      const replySubject = ticketData.ticket_number
+        ? `Re: [Ticket #${ticketData.ticket_number}] ${ticketData.title}`
+        : `Re: ${ticketData.title}`;
+
+      await sendTicketReplyEmail({
+        to:                customer.email,
+        customerName:      customer.name ?? "Customer",
+        agentName:         agentProfile?.full_name ?? "Support Team",
+        ticketTitle:       ticketData.title ?? "",
+        replyContent:      content,
+        ticketId,
+        ticketNumber:      ticketData.ticket_number ?? undefined,
+        fromAddress,
+        displayName,
+        outboundMessageId,
+        inReplyTo:         inReplyToId,
+        references:        references.length ? references : undefined,
+      });
+
+      // Record outbound so customer replies thread back in
+      await admin.from("email_messages").insert({
+        org_id:      ticketData.org_id,
+        ticket_id:   ticketId,
+        direction:   "outbound",
+        message_id:  outboundMessageId,
+        in_reply_to: inReplyToId ?? null,
+        references,
+        from_address: fromAddress ?? "noreply@supportcraft.aakasa.dev",
+        to_address:  customer.email,
+        subject:     replySubject,
+        body_plain:  content,
+        status:      "sent",
+      });
+    } catch (e) {
+      console.error("Reply email failed:", e);
     }
   }
 

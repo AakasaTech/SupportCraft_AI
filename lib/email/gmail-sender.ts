@@ -97,11 +97,14 @@ export interface GmailSendOptions {
   html:         string
   text:         string
   attachments?: Array<{ filename: string; content: string }> // base64-encoded
+  headers?:     Record<string, string>
 }
 
 function buildMime(opts: GmailSendOptions): Buffer {
   const boundary = `sc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
   const altBound = `alt_${Math.random().toString(36).slice(2)}`
+
+  const extraHeaders = Object.entries(opts.headers ?? {}).map(([k, v]) => `${k}: ${v}`)
 
   const lines: string[] = [
     'MIME-Version: 1.0',
@@ -109,6 +112,7 @@ function buildMime(opts: GmailSendOptions): Buffer {
     `To: ${opts.to}`,
     ...(opts.cc?.length ? [`CC: ${opts.cc.join(', ')}`] : []),
     `Subject: ${encodeSubject(opts.subject)}`,
+    ...extraHeaders,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     '',
     `--${boundary}`,

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendTicketAcknowledgementEmail } from "@/lib/resend";
 import { getOrgEmail } from "@/lib/email/platform-provider";
+import { renderVariables } from "@/lib/email/templates/variables";
 
 interface CreateTicketFromEmailParams {
   orgId:        string;
@@ -71,7 +72,7 @@ export async function createTicketFromEmail(
       priority:    "medium",
       channel:     params.channel,
     })
-    .select("id")
+    .select("id, ticket_number")
     .single();
 
   if (!ticket) throw new Error("Failed to create ticket");
@@ -116,20 +117,44 @@ export async function createTicketFromEmail(
     .eq("id", ticket.id);
 
   // Send acknowledgement to customer (fire-and-forget)
-  const { data: emailSettings } = await admin
-    .from("email_settings")
-    .select("tenant_slug, display_name")
-    .eq("org_id", params.orgId)
-    .single();
+  const [{ data: emailSettings }, { data: ackTemplate }] = await Promise.all([
+    admin.from("email_settings").select("tenant_slug, display_name").eq("org_id", params.orgId).single(),
+    admin.from("email_templates").select("subject, body_plain, body_html, is_active")
+      .eq("org_id", params.orgId).eq("slug", "ticket-acknowledgement").single(),
+  ]);
 
-  if (emailSettings?.tenant_slug) {
+  if (emailSettings?.tenant_slug && ackTemplate?.is_active !== false) {
+    const ticketNum = ticket.ticket_number ?? ticket.id.slice(0, 8).toUpperCase();
+    const orgName   = emailSettings.display_name ?? emailSettings.tenant_slug;
+    const vars      = {
+      customer_name:      params.fromName ?? params.fromAddress.split("@")[0],
+      ticket_number:      ticketNum,
+      ticket_subject:     params.subject,
+      organization_name:  orgName,
+      support_email:      getOrgEmail(emailSettings.tenant_slug),
+    };
+
+    const subject = ackTemplate?.subject
+      ? renderVariables(ackTemplate.subject, vars)
+      : `[Ticket #${ticketNum}] We received your request: ${params.subject}`;
+
+    const bodyPlain = ackTemplate?.body_plain
+      ? renderVariables(ackTemplate.body_plain, vars)
+      : undefined;
+
+    const bodyHtml = ackTemplate?.body_html
+      ? renderVariables(ackTemplate.body_html, vars)
+      : undefined;
+
     sendTicketAcknowledgementEmail({
-      to:          params.fromAddress,
-      customerName: params.fromName ?? params.fromAddress.split("@")[0],
-      ticketId:    ticket.id,
-      subject:     params.subject,
-      from:        getOrgEmail(emailSettings.tenant_slug),
-      displayName: emailSettings.display_name ?? emailSettings.tenant_slug,
+      to:           params.fromAddress,
+      customerName: vars.customer_name,
+      ticketNumber: ticketNum,
+      subject,
+      bodyPlain,
+      bodyHtml,
+      from:         getOrgEmail(emailSettings.tenant_slug),
+      displayName:  orgName,
     }).catch(err => console.error("Ack email failed:", err));
   }
 
