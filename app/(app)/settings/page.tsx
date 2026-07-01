@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Header } from "@/components/shared/Header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrgSettingsForm } from "@/features/settings/components/OrgSettingsForm";
 import { ProfileSettingsForm } from "@/features/settings/components/ProfileSettingsForm";
+import { getOrgEmail } from "@/lib/email/platform-provider";
 import type { Organization, Profile } from "@/types/database";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -13,6 +14,8 @@ export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const admin = createAdminClient();
 
   const { data: profileRow } = await supabase
     .from("profiles")
@@ -23,6 +26,17 @@ export default async function SettingsPage() {
   if (!profileRow) redirect("/login");
 
   const profile = profileRow as Profile & { organizations: Organization };
+
+  // Derive the canonical support email from email_settings so it stays in sync
+  const { data: emailSettings } = await admin
+    .from("email_settings")
+    .select("tenant_slug")
+    .eq("org_id", profile.org_id)
+    .single();
+
+  const derivedSupportEmail = emailSettings?.tenant_slug
+    ? getOrgEmail(emailSettings.tenant_slug)
+    : null;
 
   return (
     <div>
@@ -40,6 +54,7 @@ export default async function SettingsPage() {
             <OrgSettingsForm
               org={profile.organizations}
               isAdmin={["owner", "admin"].includes(profile.role)}
+              derivedSupportEmail={derivedSupportEmail}
             />
           </TabsContent>
         </Tabs>

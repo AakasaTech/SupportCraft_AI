@@ -4,6 +4,7 @@ import { useTransition, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,9 +25,10 @@ const TIMEZONES = [
 interface OrgSettingsFormProps {
   org: Organization;
   isAdmin: boolean;
+  derivedSupportEmail: string | null;
 }
 
-export function OrgSettingsForm({ org, isAdmin }: OrgSettingsFormProps) {
+export function OrgSettingsForm({ org, isAdmin, derivedSupportEmail }: OrgSettingsFormProps) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const router = useRouter();
@@ -51,7 +53,6 @@ export function OrgSettingsForm({ org, isAdmin }: OrgSettingsFormProps) {
         .update({
           name: data.name,
           website: data.website || null,
-          support_email: data.support_email || null,
           country: data.country || null,
           timezone: data.timezone || "UTC",
         })
@@ -98,19 +99,19 @@ export function OrgSettingsForm({ org, isAdmin }: OrgSettingsFormProps) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="support_email">Support email</Label>
+            <Label>Support email</Label>
             <Input
-              id="support_email"
-              type="email"
-              placeholder="support@yourcompany.com"
-              disabled={!isAdmin}
-              {...register("support_email")}
+              value={derivedSupportEmail ?? "Not configured"}
+              readOnly
+              disabled
+              className="text-muted-foreground"
             />
-            {errors.support_email && (
-              <p className="text-xs text-destructive">{errors.support_email.message}</p>
-            )}
             <p className="text-xs text-muted-foreground">
-              Shown to customers in email notifications
+              Set in{" "}
+              <Link href="/settings/email" className="underline underline-offset-2 hover:text-foreground transition-colors">
+                Settings → Email
+              </Link>
+              . Shown to customers in notifications.
             </p>
           </div>
 

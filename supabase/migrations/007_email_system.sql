@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS email_messages (
   direction             text NOT NULL CHECK (direction IN ('inbound','outbound')),
   message_id            text UNIQUE,
   in_reply_to           text,
-  references            text[] DEFAULT '{}',
+  "references"          text[] DEFAULT '{}',
   from_address          text NOT NULL,
   to_address            text NOT NULL,
   cc_addresses          text[] DEFAULT '{}',

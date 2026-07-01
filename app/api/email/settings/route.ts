@@ -90,6 +90,12 @@ export async function PUT(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Keep organizations.support_email in sync so email templates always use the right address
+  await admin
+    .from("organizations")
+    .update({ support_email: getOrgEmail(slug) })
+    .eq("id", profile.org_id);
+
   return NextResponse.json({
     settings:      data,
     support_email: getOrgEmail(slug),
