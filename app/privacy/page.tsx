@@ -112,8 +112,8 @@ export default function PrivacyPage() {
             </ul>
             <p className="mt-3">
               To exercise these rights, email us at{" "}
-              <a href="mailto:privacy@aakasadigital.com" className="text-primary hover:underline">
-                privacy@aakasadigital.com
+              <a href="mailto:privacy@aakasa.dev" className="text-primary hover:underline">
+                privacy@aakasa.dev
               </a>
               . We will respond within 30 days.
             </p>
@@ -162,7 +162,7 @@ export default function PrivacyPage() {
               If you have questions or concerns about this Privacy Policy, please contact us:
             </p>
             <ul className="list-none pl-0 mt-2 not-prose space-y-1 text-sm text-muted-foreground">
-              <li>Email: <a href="mailto:privacy@aakasadigital.com" className="text-primary hover:underline">privacy@aakasadigital.com</a></li>
+              <li>Email: <a href="mailto:privacy@aakasa.dev" className="text-primary hover:underline">privacy@aakasa.dev</a></li>
               <li>Product: SupportCraft AI by Aakasa Digital</li>
             </ul>
           </section>

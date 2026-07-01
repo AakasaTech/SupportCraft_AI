@@ -56,8 +56,8 @@ export default function TermsPage() {
               To use the Service you must register for an account and provide accurate, complete information.
               You are responsible for maintaining the confidentiality of your credentials and for all activity
               that occurs under your account. You must notify us immediately at{" "}
-              <a href="mailto:support@aakasadigital.com" className="text-primary hover:underline">
-                support@aakasadigital.com
+              <a href="mailto:legal@aakasa.dev" className="text-primary hover:underline">
+                legal@aakasa.dev
               </a>{" "}
               if you suspect unauthorised use.
             </p>
@@ -216,7 +216,7 @@ export default function TermsPage() {
               Questions about these Terms should be directed to:
             </p>
             <ul className="list-none pl-0 mt-2 not-prose space-y-1 text-sm text-muted-foreground">
-              <li>Email: <a href="mailto:legal@aakasadigital.com" className="text-primary hover:underline">legal@aakasadigital.com</a></li>
+              <li>Email: <a href="mailto:legal@aakasa.dev" className="text-primary hover:underline">legal@aakasa.dev</a></li>
               <li>Product: SupportCraft AI by Aakasa Digital</li>
             </ul>
           </section>
