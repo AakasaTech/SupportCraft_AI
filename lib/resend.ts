@@ -79,6 +79,54 @@ export async function sendNewTicketEmail(params: NewTicketEmailParams) {
   await sendEmail({ from, to: params.to, subject: `New ticket assigned: ${params.ticketTitle}`, html, text });
 }
 
+// ─── Ticket acknowledgement (to customer on inbound email) ───────────────────
+
+export interface TicketAcknowledgementEmailParams {
+  to:           string;
+  customerName: string;
+  ticketId:     string;
+  subject:      string;
+  from:         string; // org support address e.g. xbit@supportcraft.aakasa.dev
+  displayName:  string; // org display name
+}
+
+export async function sendTicketAcknowledgementEmail(params: TicketAcknowledgementEmailParams) {
+  const shortId   = params.ticketId.slice(0, 8).toUpperCase();
+  const ticketRef = `[Ticket #${shortId}]`;
+  const fromLine  = `${params.displayName} Support <${params.from}>`;
+
+  const html = `
+    <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+      <h2 style="color:#1a1a1a;">We received your request</h2>
+      <p style="color:#555;">Hi ${params.customerName},</p>
+      <p style="color:#555;">
+        Thank you for contacting support. We've created a ticket for your request and our team will get back to you shortly.
+      </p>
+      <div style="background:#f5f5f5;border-left:4px solid #6d28d9;padding:16px;border-radius:4px;margin:16px 0;">
+        <p style="margin:0;color:#333;font-size:13px;">Ticket reference</p>
+        <p style="margin:4px 0 0;color:#1a1a1a;font-weight:600;font-size:18px;">${ticketRef}</p>
+        <p style="margin:4px 0 0;color:#555;font-size:13px;">${params.subject}</p>
+      </div>
+      <p style="color:#555;">
+        You can reply directly to this email to add more information to your ticket.
+      </p>
+      <p style="color:#999;font-size:12px;margin-top:24px;">
+        Please keep the ticket reference <strong>${ticketRef}</strong> in the subject line when replying.
+      </p>
+    </div>
+  `;
+
+  const text = `Hi ${params.customerName},\n\nThank you for contacting support. We've received your request.\n\nTicket reference: ${ticketRef}\nSubject: ${params.subject}\n\nYou can reply directly to this email to add more information.\n\nPlease keep the reference ${ticketRef} in the subject line when replying.`;
+
+  await sendEmail({
+    from:    fromLine,
+    to:      params.to,
+    subject: `${ticketRef} We received your request: ${params.subject}`,
+    html,
+    text,
+  });
+}
+
 // ─── Ticket reply (to customer) ───────────────────────────────────────────────
 
 export interface TicketReplyEmailParams {

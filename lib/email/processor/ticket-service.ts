@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { sendTicketAcknowledgementEmail } from "@/lib/resend";
+import { getOrgEmail } from "@/lib/email/platform-provider";
 
 interface CreateTicketFromEmailParams {
   orgId:        string;
@@ -112,6 +114,24 @@ export async function createTicketFromEmail(
     .from("tickets")
     .update({ source_email_message_id: emailMsg.id })
     .eq("id", ticket.id);
+
+  // Send acknowledgement to customer (fire-and-forget)
+  const { data: emailSettings } = await admin
+    .from("email_settings")
+    .select("tenant_slug, display_name")
+    .eq("org_id", params.orgId)
+    .single();
+
+  if (emailSettings?.tenant_slug) {
+    sendTicketAcknowledgementEmail({
+      to:          params.fromAddress,
+      customerName: params.fromName ?? params.fromAddress.split("@")[0],
+      ticketId:    ticket.id,
+      subject:     params.subject,
+      from:        getOrgEmail(emailSettings.tenant_slug),
+      displayName: emailSettings.display_name ?? emailSettings.tenant_slug,
+    }).catch(err => console.error("Ack email failed:", err));
+  }
 
   return { ticketId: ticket.id, customerId: customer.id, emailMessageId: emailMsg.id };
 }
