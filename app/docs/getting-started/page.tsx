@@ -54,7 +54,7 @@ export default function GettingStartedPage() {
           acme@supportcraft.aakasa.dev
         </div>
         <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-          You can also set a <strong>Display Name</strong> (shown in your customers&apos; inbox as the sender name, e.g. "Acme Support") and an optional <strong>Email Signature</strong> that appears at the bottom of every agent reply.
+          You can also set a <strong>Display Name</strong> (shown in your customers&apos; inbox as the sender name, e.g. &quot;Acme Support&quot;) and an optional <strong>Email Signature</strong> that appears at the bottom of every agent reply.
         </p>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           Once saved, share your new support address with your customers — on your website, in your app, or in your email footer. Any email sent there will arrive in SupportCraft AI within seconds.

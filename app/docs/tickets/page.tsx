@@ -117,14 +117,14 @@ export default function TicketsPage() {
           <div>
             <h3 className="text-sm font-semibold text-foreground">Category</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              A free-text field for grouping tickets by topic (e.g. "Billing", "Technical", "Onboarding"). Useful for filtering the ticket list and tracking trends in your reports.
+              A free-text field for grouping tickets by topic (e.g. &quot;Billing&quot;, &quot;Technical&quot;, &quot;Onboarding&quot;). Useful for filtering the ticket list and tracking trends in your reports.
             </p>
           </div>
 
           <div>
             <h3 className="text-sm font-semibold text-foreground">Tags</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Add multiple tags to a ticket for finer-grained organisation. Tags are free-form and searchable. For example, you might tag a ticket with both "billing" and "urgent" to cross-reference it in two ways.
+              Add multiple tags to a ticket for finer-grained organisation. Tags are free-form and searchable. For example, you might tag a ticket with both &quot;billing&quot; and &quot;urgent&quot; to cross-reference it in two ways.
             </p>
           </div>
         </div>
