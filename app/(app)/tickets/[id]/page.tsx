@@ -6,7 +6,7 @@ import { getTicketById, getAgents } from "@/features/tickets/lib/queries";
 import { hasPermission } from "@/lib/permissions";
 import { TicketHeader } from "@/components/tickets/detail/TicketHeader";
 import { ConversationThread } from "@/components/tickets/conversation/ConversationThread";
-import { ReplyEditor } from "@/components/tickets/editor/ReplyEditor";
+import { TicketReplySection } from "@/components/tickets/detail/TicketReplySection";
 import { TicketInfoPanel } from "@/components/tickets/detail/TicketInfoPanel";
 import { CustomerInfoPanel } from "@/components/tickets/detail/CustomerInfoPanel";
 import { ActivityPanel } from "@/components/tickets/detail/ActivityPanel";
@@ -61,9 +61,8 @@ export default async function TicketDetailPage({ params }: Props) {
             initialMessages={messages as TicketMessageWithAuthor[]}
           />
 
-          <ReplyEditor
+          <TicketReplySection
             ticketId={ticket.id}
-            onRequestAI={undefined}
           />
         </div>
 
