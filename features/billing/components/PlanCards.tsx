@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check } from "lucide-react";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import { Check, AlertCircle } from "lucide-react";
+import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { PRICING_PLANS, type PricingPlan } from "@/lib/plans";
 import type { OrgPlan } from "@/types/database";
 
@@ -95,6 +95,9 @@ function PlanCard({
   isCurrent: boolean;
   orgId:     string;
 }) {
+  const [paypalError, setPaypalError] = useState<string | null>(null);
+  const [{ isPending }] = usePayPalScriptReducer();
+
   const price  = yearly && plan.yearlyPrice !== null ? plan.yearlyPrice : plan.monthlyPrice;
   const period = plan.monthlyPrice === 0 ? "forever" : yearly ? "/year" : "/month";
   const planId = yearly ? plan.paypalYearlyPlanId : plan.paypalMonthlyPlanId;
@@ -160,13 +163,34 @@ function PlanCard({
             Downgrade on cancellation
           </div>
         ) : planId ? (
-          <PayPalButtons
-            style={{ layout: "vertical", label: "subscribe", height: 35 }}
-            createSubscription={(_data, actions) =>
-              actions.subscription.create({ plan_id: planId, custom_id: orgId })
-            }
-            onApprove={async () => window.location.reload()}
-          />
+          <div>
+            {isPending && (
+              <div className="w-full rounded-lg bg-muted py-2 text-center text-xs text-muted-foreground animate-pulse">
+                Loading payment…
+              </div>
+            )}
+            {paypalError && (
+              <div className="mb-2 flex items-start gap-1.5 rounded-lg bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+                <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                {paypalError}
+              </div>
+            )}
+            <PayPalButtons
+              style={{ layout: "vertical", label: "subscribe", height: 40 }}
+              disabled={isPending}
+              createSubscription={(_data, actions) => {
+                setPaypalError(null);
+                return actions.subscription.create({ plan_id: planId, custom_id: orgId });
+              }}
+              onApprove={async () => {
+                window.location.href = window.location.pathname + "?subscribed=1";
+              }}
+              onError={(err) => {
+                console.error("PayPal error:", err);
+                setPaypalError("Payment failed. Please try again or contact support.");
+              }}
+            />
+          </div>
         ) : (
           <a
             href="/register"

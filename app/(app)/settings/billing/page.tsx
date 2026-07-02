@@ -10,7 +10,12 @@ import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Billing" };
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ subscribed?: string }>;
+}) {
+  const { subscribed } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -50,6 +55,12 @@ export default async function BillingPage() {
     <div>
       <Header title="Billing & Plans" description="Manage your subscription" />
       <div className="p-6 space-y-8">
+        {subscribed && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-800">
+            <strong>Subscription activated!</strong> Your plan will update shortly. If it doesn&apos;t reflect below within a minute, refresh the page.
+          </div>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>Current Plan</CardTitle>
