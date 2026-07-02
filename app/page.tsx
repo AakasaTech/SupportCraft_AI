@@ -28,6 +28,61 @@ export const metadata: Metadata = {
     "Resolve tickets faster with AI-drafted replies, a smart knowledge base, and real-time team collaboration. Built for modern support teams.",
 };
 
+const APP_URL = "https://supportcraft.aakasa.dev";
+
+const softwareAppSchema = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "SupportCraft AI",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "description": "AI-powered customer support platform for freelancers, agencies, and growing businesses. Manage tickets, draft AI replies, and collaborate as a team.",
+  "url": APP_URL,
+  "image": `${APP_URL}/android-chrome-512x512.png`,
+  "creator": {
+    "@type": "Organization",
+    "name": "Aakasa Digital",
+    "url": "https://aakasa.dev",
+  },
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Free",
+      "description": "Get started at no cost. No credit card required.",
+      "price": "0",
+      "priceCurrency": "USD",
+    },
+    {
+      "@type": "Offer",
+      "name": "Freelancer",
+      "description": "Everything a solo professional needs to handle customer support.",
+      "price": "9",
+      "priceCurrency": "USD",
+    },
+    {
+      "@type": "Offer",
+      "name": "Startup",
+      "description": "The complete toolkit for a growing support team.",
+      "price": "19",
+      "priceCurrency": "USD",
+    },
+    {
+      "@type": "Offer",
+      "name": "Business",
+      "description": "Advanced AI and workflows for high-volume teams.",
+      "price": "39",
+      "priceCurrency": "USD",
+    },
+    {
+      "@type": "Offer",
+      "name": "Agency",
+      "description": "Manage multiple clients from one powerful platform.",
+      "price": "79",
+      "priceCurrency": "USD",
+    },
+  ],
+};
+
 // ─── Feature strip ────────────────────────────────────────────────────────────
 
 const featureStrip = [
@@ -111,6 +166,11 @@ const STATUS_PILL: Record<string, string> = {
 
 export default function LandingPage() {
   return (
+    <>
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
+    />
     <div className="min-h-screen bg-background text-foreground">
 
       {/* ── Nav ─────────────────────────────────────────────────────────────── */}
@@ -127,7 +187,7 @@ export default function LandingPage() {
             <Link href="#features"      className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link>
             <Link href="#how-it-works"  className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it works</Link>
             <Link href="#pricing"       className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
-            <Link href="/privacy"       className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link>
+            <Link href="/faq"           className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</Link>
             <Link href="/portal/login"  className="text-sm text-muted-foreground hover:text-foreground transition-colors">Support portal</Link>
           </div>
 
@@ -523,7 +583,7 @@ export default function LandingPage() {
 
       </main>
 
-      {/* ── Footer ───────────────────────────────────────────────────────────── */}
+      {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="border-t border-border px-6 py-10">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 sm:flex-row">
           <Link href="/" className="flex items-center gap-2">
@@ -543,5 +603,6 @@ export default function LandingPage() {
       </footer>
 
     </div>
+    </>
   );
 }
