@@ -57,15 +57,18 @@ export function MessageBubble({ message, isFirst }: Props) {
   const isInternal = message.is_internal;
   const authorName = message.author?.full_name ?? (isCustomer ? "Customer" : isAi ? "AI" : "Unknown");
 
+    const isHtml = /<[a-z][\s\S]*>/i.test(message.content);
+
   const bubbleCls = cn(
-    "rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words max-w-[85%]",
+    "rounded-2xl px-4 py-3 text-sm leading-relaxed break-words max-w-[85%]",
+    !isHtml && "whitespace-pre-wrap",
     isInternal
       ? "bg-amber-50 border border-amber-200 text-amber-900"
       : isAi
         ? "bg-ai-subtle border border-ai/20 text-foreground"
         : isCustomer
           ? "bg-muted text-foreground"
-          : "bg-primary text-white"
+          : "bg-primary-subtle border border-primary/20 text-foreground"
   );
 
   return (
@@ -92,9 +95,17 @@ export function MessageBubble({ message, isFirst }: Props) {
         </div>
 
         {/* Bubble */}
-        <div className={bubbleCls}>
-          {message.content}
-        </div>
+        {isHtml ? (
+          <div
+            className={cn(bubbleCls, "sc-message-html")}
+            // Content is sanitized server-side before storage (sanitize-html in API routes)
+            dangerouslySetInnerHTML={{ __html: message.content }}
+          />
+        ) : (
+          <div className={bubbleCls}>
+            {message.content}
+          </div>
+        )}
       </div>
     </motion.div>
   );

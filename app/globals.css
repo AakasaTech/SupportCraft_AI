@@ -896,4 +896,25 @@
   .ProseMirror a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
   .ProseMirror hr { border: none; border-top: 1px solid var(--color-border); margin: 1.25em 0; }
   .ProseMirror img { max-width: 100%; border-radius: 0.75rem; }
+
+  /* Rendered HTML content in message bubbles (from TipTap editor) */
+  .sc-message-html h1 { font-size: 1.3rem; font-weight: 700; margin: 0.6em 0 0.25em; }
+  .sc-message-html h2 { font-size: 1.1rem; font-weight: 700; margin: 0.6em 0 0.25em; }
+  .sc-message-html h3 { font-size: 1rem; font-weight: 600; margin: 0.5em 0 0.2em; }
+  .sc-message-html p  { margin: 0.4em 0; line-height: 1.65; }
+  .sc-message-html p:first-child { margin-top: 0; }
+  .sc-message-html p:last-child  { margin-bottom: 0; }
+  .sc-message-html ul { list-style: disc; padding-left: 1.4em; margin: 0.4em 0; }
+  .sc-message-html ol { list-style: decimal; padding-left: 1.4em; margin: 0.4em 0; }
+  .sc-message-html li { margin: 0.2em 0; }
+  .sc-message-html blockquote { border-left: 3px solid currentColor; opacity: 0.8; padding-left: 0.75em; font-style: italic; margin: 0.5em 0; }
+  .sc-message-html code:not(pre code) { background: rgba(0,0,0,0.08); padding: 0.1em 0.35em; border-radius: 0.25em; font-size: 0.82em; }
+  .sc-message-html pre { background: rgba(0,0,0,0.08); border-radius: 0.5rem; padding: 0.75em 1em; overflow-x: auto; margin: 0.5em 0; }
+  .sc-message-html pre code { background: transparent; padding: 0; }
+  .sc-message-html a { text-decoration: underline; text-underline-offset: 2px; }
+  .sc-message-html img { max-width: 100%; border-radius: 0.5rem; margin: 0.25em 0; }
+  .sc-message-html strong { font-weight: 600; }
+  .sc-message-html em { font-style: italic; }
+  .sc-message-html u  { text-decoration: underline; }
+  .sc-message-html s  { text-decoration: line-through; }
 }

@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Mail, MessageSquareText, ChevronRight } from "lucide-react";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Header } from "@/components/shared/Header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -58,6 +60,28 @@ export default async function SettingsPage() {
             />
           </TabsContent>
         </Tabs>
+
+        {/* Quick links to sub-settings */}
+        <div className="mt-8 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">More settings</p>
+          {[
+            { href: "/settings/email",            icon: Mail,                label: "Email",            desc: "Configure your support address and templates" },
+            { href: "/settings/canned-responses", icon: MessageSquareText,   label: "Canned Responses", desc: "Pre-written replies for common questions" },
+          ].map(({ href, icon: Icon, label, desc }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 hover:bg-muted/50 transition-colors group"
+            >
+              <Icon size={16} className="text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">{label}</p>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+              </div>
+              <ChevronRight size={14} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
