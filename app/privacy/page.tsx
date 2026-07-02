@@ -172,19 +172,40 @@ export default function PrivacyPage() {
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 sm:flex-row">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/app_icon.png" alt="SupportCraft AI" width={28} height={28} className="rounded-md" />
-            <span className="text-sm font-semibold">SupportCraft AI</span>
-            <span className="text-xs text-muted-foreground">by Aakasa Digital</span>
-          </Link>
-          <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} SupportCraft AI. All rights reserved.
-          </p>
-          <div className="flex gap-6 text-xs text-muted-foreground">
-            <Link href="/portal/login" className="hover:text-foreground transition-colors">Customer portal</Link>
-            <Link href="/privacy"      className="hover:text-foreground transition-colors font-medium text-foreground">Privacy</Link>
-            <Link href="/terms"        className="hover:text-foreground transition-colors">Terms</Link>
+        <div className="mx-auto max-w-7xl space-y-5">
+          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+            <div className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-2">
+                <Image src="/app_icon.png" alt="SupportCraft AI" width={28} height={28} className="rounded-md" />
+                <span className="text-sm font-semibold">SupportCraft AI</span>
+              </Link>
+              <span className="text-xs text-muted-foreground">
+                by{' '}
+                <a href="https://aakasa.dev" className="hover:text-foreground transition-colors">Aakasa Digital</a>
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              © {new Date().getFullYear()} SupportCraft AI. All rights reserved.
+            </p>
+            <div className="flex gap-6 text-xs text-muted-foreground">
+              <Link href="/portal/login" className="hover:text-foreground transition-colors">Customer portal</Link>
+              <Link href="/privacy"      className="hover:text-foreground transition-colors font-medium text-foreground">Privacy</Link>
+              <Link href="/terms"        className="hover:text-foreground transition-colors">Terms</Link>
+            </div>
+          </div>
+          <div className="flex flex-col items-center justify-between gap-2 border-t border-border/50 pt-4 sm:flex-row">
+            <p className="text-xs text-muted-foreground">
+              Built by{' '}
+              <a href="https://aakasa.dev" className="font-medium hover:text-foreground transition-colors">
+                Aakasa Digital
+              </a>
+            </p>
+            <a
+              href="https://billcraft.aakasa.dev"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Also try BillCraft AI — AI-powered invoicing →
+            </a>
           </div>
         </div>
       </footer>
