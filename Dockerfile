@@ -15,7 +15,10 @@
 #     --build-arg NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS=... \
 #     -t supportcraft-ai:latest .
 #
-# Run:
+# Run (preferred):
+#   docker compose up --build
+#
+# Or manually:
 #   docker run -p 3002:3002 --env-file .env.production supportcraft-ai:latest
 # ─────────────────────────────────────────────────────────────────────────────
 

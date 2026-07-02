@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* vars are embedded at build time by Next.js
+        NEXT_PUBLIC_SUPABASE_URL:            ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY:       ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_APP_URL:                 ${NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_PAYPAL_CLIENT_ID:        ${NEXT_PUBLIC_PAYPAL_CLIENT_ID}
+        NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO:      ${NEXT_PUBLIC_PAYPAL_PLAN_ID_PRO}
+        NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS: ${NEXT_PUBLIC_PAYPAL_PLAN_ID_BUSINESS}
+    image: supportcraft-ai:latest
+    container_name: supportcraft-ai
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "3002"
+      HOSTNAME: "0.0.0.0"
