@@ -34,5 +34,47 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency:  "yearly",
       priority:         0.6,
     },
+    {
+      url:              `${APP_URL}/faq`,
+      lastModified:     new Date(),
+      changeFrequency:  "monthly",
+      priority:         0.7,
+    },
+    {
+      url:              `${APP_URL}/docs`,
+      lastModified:     new Date(),
+      changeFrequency:  "monthly",
+      priority:         0.8,
+    },
+    {
+      url:              `${APP_URL}/docs/getting-started`,
+      lastModified:     new Date(),
+      changeFrequency:  "monthly",
+      priority:         0.7,
+    },
+    {
+      url:              `${APP_URL}/docs/tickets`,
+      lastModified:     new Date(),
+      changeFrequency:  "monthly",
+      priority:         0.7,
+    },
+    {
+      url:              `${APP_URL}/docs/replying-to-tickets`,
+      lastModified:     new Date(),
+      changeFrequency:  "monthly",
+      priority:         0.7,
+    },
+    {
+      url:              `${APP_URL}/docs/ai-features`,
+      lastModified:     new Date(),
+      changeFrequency:  "monthly",
+      priority:         0.7,
+    },
+    {
+      url:              `${APP_URL}/docs/faq`,
+      lastModified:     new Date(),
+      changeFrequency:  "monthly",
+      priority:         0.7,
+    },
   ];
 }

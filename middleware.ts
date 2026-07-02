@@ -7,6 +7,7 @@ const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/update-passwor
 
 // Routes that anyone can access
 const PUBLIC_ROUTES = ["/", "/auth/callback", "/auth/google/callback", "/privacy", "/terms", "/faq"];
+const PUBLIC_PREFIXES = ["/docs"];
 
 // Portal-specific public routes (unauthenticated portal visitors)
 const PORTAL_PUBLIC_ROUTES = ["/portal/login"];
@@ -22,7 +23,7 @@ export async function middleware(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request);
 
   const isApiRoute = pathname.startsWith("/api");
-  const isPublicRoute = PUBLIC_ROUTES.some((r) => pathname === r);
+  const isPublicRoute = PUBLIC_ROUTES.some((r) => pathname === r) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthRoute = AUTH_ROUTES.some((r) => pathname.startsWith(r));
   const isInvitationRoute = pathname.startsWith("/invitation/");
   const isPortalRoute = pathname.startsWith("/portal");
