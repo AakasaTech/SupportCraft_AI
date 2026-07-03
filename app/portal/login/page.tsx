@@ -9,7 +9,9 @@ export default function PortalLoginPage() {
   return (
     <div className="max-w-sm mx-auto">
       <div className="mb-8 text-center">
-        <Image src="/logo.png" alt="SupportCraft AI" width={320} height={90} priority className="mx-auto" />
+        <Link href="/" className="inline-block opacity-90 hover:opacity-100 transition-opacity">
+          <Image src="/logo.png" alt="SupportCraft AI" width={320} height={90} priority className="mx-auto" />
+        </Link>
       </div>
       <div className="sc-glass rounded-2xl p-8 shadow-xl space-y-6">
         <div>
