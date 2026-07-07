@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Mail, MessageSquareText, ChevronRight } from "lucide-react";
+import { Key, Mail, MessageSquareText, ChevronRight } from "lucide-react";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Header } from "@/components/shared/Header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -67,6 +67,7 @@ export default async function SettingsPage() {
           {[
             { href: "/settings/email",            icon: Mail,                label: "Email",            desc: "Configure your support address and templates" },
             { href: "/settings/canned-responses", icon: MessageSquareText,   label: "Canned Responses", desc: "Pre-written replies for common questions" },
+            { href: "/settings/api",              icon: Key,                 label: "API Keys",         desc: "Manage API keys for external integrations" },
           ].map(({ href, icon: Icon, label, desc }) => (
             <Link
               key={href}
