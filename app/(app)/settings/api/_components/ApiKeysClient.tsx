@@ -214,10 +214,10 @@ export function ApiKeysClient({
       )}
 
       {/* Usage hint */}
-      <div className="rounded-xl border border-border bg-muted/30 p-4 text-xs text-muted-foreground space-y-1">
-        <p className="font-semibold text-foreground">How to use with TaskCraft AI</p>
-        <p>In TaskCraft AI, go to <strong>Integrations → SupportCraft AI</strong> and paste your API key.</p>
-        <p>Set the base URL to <code className="rounded bg-muted px-1 py-0.5">{process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.supportcraft.ai'}/api</code></p>
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+        <p className="text-sm font-semibold text-foreground">How to use with TaskCraft AI</p>
+        <p className="text-sm text-foreground/80">In TaskCraft AI, go to <strong>Integrations → SupportCraft AI</strong> and paste your API key.</p>
+        <p className="text-sm text-foreground/80">Set the base URL to <code className="rounded border border-border bg-background px-1.5 py-0.5 text-xs font-mono text-foreground">https://supportcraft.aakasa.dev/api/v1</code></p>
       </div>
     </div>
   )
