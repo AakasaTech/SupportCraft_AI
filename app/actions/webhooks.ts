@@ -25,14 +25,15 @@ function requireAdmin(role: string) {
 }
 
 export async function createWebhookAction(input: {
-  name:   string
-  url:    string
-  events: string[]
+  name:    string
+  url:     string
+  events:  string[]
+  secret?: string       // user-supplied (e.g. pasted from TaskCraft); auto-generated if omitted
 }) {
   const ctx = await getCtx()
   if (!ctx || !requireAdmin(ctx.role)) return { error: 'Unauthorized' }
 
-  const secret = randomBytes(24).toString('hex')
+  const secret = input.secret?.trim() || randomBytes(24).toString('hex')
 
   const { data, error } = await ctx.supabase
     .from('outbound_webhooks')

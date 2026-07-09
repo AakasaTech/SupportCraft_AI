@@ -105,10 +105,11 @@ export function WebhooksClient({ webhooks: initialWebhooks, canManage, appUrl }:
   const [showForm, setShowForm] = useState(false)
 
   // New webhook form state
-  const [newName,   setNewName]   = useState('')
-  const [newUrl,    setNewUrl]    = useState('')
-  const [newEvents, setNewEvents] = useState<string[]>(['ticket.created', 'ticket.status_changed'])
-  const [newSecret, setNewSecret] = useState<string | null>(null)
+  const [newName,       setNewName]       = useState('')
+  const [newUrl,        setNewUrl]        = useState('')
+  const [newEvents,     setNewEvents]     = useState<string[]>(['ticket.created', 'ticket.status_changed'])
+  const [newSecretInput, setNewSecretInput] = useState('')   // user-supplied signing secret
+  const [revealSecret,  setRevealSecret]  = useState<string | null>(null)  // shown after creation
 
   const [isCreating,  startCreate]  = useTransition()
   const [testingId,   setTestingId] = useState<string | null>(null)
@@ -126,14 +127,22 @@ export function WebhooksClient({ webhooks: initialWebhooks, canManage, appUrl }:
       return
     }
     startCreate(async () => {
-      const res = await createWebhookAction({ name: newName, url: newUrl, events: newEvents })
+      const res = await createWebhookAction({
+        name:   newName,
+        url:    newUrl,
+        events: newEvents,
+        secret: newSecretInput || undefined,
+      })
       if ('error' in res && res.error) { toast.error(res.error); return }
       if ('data' in res && res.data) {
-        setWebhooks((prev) => [res.data as WebhookRow, ...prev])
-        setNewSecret((res.data as WebhookRow).secret)
+        const row = res.data as WebhookRow
+        setWebhooks((prev) => [row, ...prev])
+        // Only show the one-time reveal if we auto-generated the secret
+        if (!newSecretInput.trim()) setRevealSecret(row.secret)
         setNewName('')
         setNewUrl('')
         setNewEvents(['ticket.created', 'ticket.status_changed'])
+        setNewSecretInput('')
         setShowForm(false)
         toast.success('Webhook created')
       }
@@ -195,15 +204,16 @@ export function WebhooksClient({ webhooks: initialWebhooks, canManage, appUrl }:
         <p className="text-xs text-muted-foreground pt-1">TaskCraft webhook URL: <span className="font-mono">{appUrl.replace('supportcraft', 'taskcraft')}/api/supportcraft/webhook?workspace_id=YOUR_WORKSPACE_ID</span></p>
       </div>
 
-      {/* One-time secret reveal after creation */}
-      {newSecret && (
+      {/* One-time reveal for auto-generated secrets */}
+      {revealSecret && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
-          <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Save your signing secret — it won&apos;t be shown again</p>
-          <code className="block w-full rounded bg-background border border-border px-3 py-2 text-xs font-mono break-all select-all">{newSecret}</code>
-          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(newSecret); toast.success('Copied') }}>
+          <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Auto-generated signing secret — save it now</p>
+          <p className="text-xs text-amber-700/80 dark:text-amber-400/80">Copy this into TaskCraft AI → Integrations → SupportCraft → Webhook Secret.</p>
+          <code className="block w-full rounded bg-background border border-border px-3 py-2 text-xs font-mono break-all select-all">{revealSecret}</code>
+          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(revealSecret); toast.success('Copied') }}>
             <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy secret
           </Button>
-          <Button size="sm" variant="ghost" className="ml-2" onClick={() => setNewSecret(null)}>Dismiss</Button>
+          <Button size="sm" variant="ghost" className="ml-2" onClick={() => setRevealSecret(null)}>Dismiss</Button>
         </div>
       )}
 
@@ -221,6 +231,19 @@ export function WebhooksClient({ webhooks: initialWebhooks, canManage, appUrl }:
             <div className="space-y-1.5">
               <Label htmlFor="wh-url">Endpoint URL</Label>
               <Input id="wh-url" type="url" value={newUrl} onChange={(e) => setNewUrl(e.target.value)} placeholder="https://taskcraft.aakasa.dev/api/supportcraft/webhook?workspace_id=..." />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="wh-secret">Signing Secret <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                id="wh-secret"
+                type="text"
+                value={newSecretInput}
+                onChange={(e) => setNewSecretInput(e.target.value)}
+                placeholder="Paste the Webhook Secret from TaskCraft AI, or leave blank to auto-generate"
+                className="font-mono text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">In TaskCraft: Integrations → SupportCraft → copy the Webhook Secret and paste it here.</p>
             </div>
 
             <div className="space-y-2">
