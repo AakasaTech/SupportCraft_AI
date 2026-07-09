@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateApiKey } from '@/lib/api-auth'
 import { createAdminClient } from '@/lib/supabase/server'
+import { dispatchWebhookEvent } from '@/lib/webhooks'
 
 // ── Status / priority helpers ─────────────────────────────────────────────────
 
@@ -132,6 +133,19 @@ export async function PATCH(
     .eq('org_id', auth.orgId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Fire webhook non-blocking — fetch updated ticket for payload
+  db.from('tickets').select('ticket_number, title, status, priority').eq('id', id).single()
+    .then(({ data: t }) => {
+      if (t) dispatchWebhookEvent(auth.orgId, 'ticket.status_changed', {
+        id,
+        number:   t.ticket_number ?? '',
+        title:    t.title,
+        status:   t.status,
+        priority: t.priority,
+        url:      `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${id}`,
+      }).catch(() => {})
+    })
 
   return NextResponse.json({ data: { id, status: body.status } })
 }

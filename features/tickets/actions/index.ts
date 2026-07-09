@@ -9,6 +9,7 @@ import { logAuditEvent } from "@/lib/audit";
 import { sendNewTicketEmail, sendTicketReplyEmail } from "@/lib/resend";
 import { getOrgEmail } from "@/lib/email/platform-provider";
 import { getPlanLimits } from "@/lib/plans";
+import { dispatchWebhookEvent } from "@/lib/webhooks";
 import type { OrgPlan } from "@/types/database";
 import {
   createTicketSchema,
@@ -135,6 +136,16 @@ export async function createTicket(formData: FormData) {
   }
 
   await logAuditEvent({ event: "ticket.created", orgId: profile.org_id, userId: user.id, metadata: { ticketId: ticket.id } });
+
+  dispatchWebhookEvent(profile.org_id, 'ticket.created', {
+    id:       ticket.id,
+    number:   ticket.ticket_number ?? '',
+    title:    parsed.data.title,
+    status:   'new',
+    priority: parsed.data.priority,
+    url:      `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticket.id}`,
+  }).catch(() => {})
+
   revalidatePath("/tickets");
   return { ticketId: ticket.id, ticketNumber: ticket.ticket_number };
 }
@@ -190,6 +201,20 @@ export async function updateTicket(formData: FormData) {
   if (updates.status) {
     await logAuditEvent({ event: "ticket.status_changed", orgId: "", userId: user.id,
       metadata: { ticketId, newStatus: updates.status } });
+
+    // Fetch org_id + minimal ticket data for the webhook payload (non-blocking)
+    const admin = createAdminClient()
+    admin.from('tickets').select('org_id, ticket_number, title, status, priority').eq('id', ticketId).single()
+      .then(({ data: t }) => {
+        if (t) dispatchWebhookEvent(t.org_id, 'ticket.status_changed', {
+          id:       ticketId,
+          number:   t.ticket_number ?? '',
+          title:    t.title,
+          status:   t.status,
+          priority: t.priority,
+          url:      `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticketId}`,
+        }).catch(() => {})
+      })
   }
 
   revalidatePath(`/tickets/${ticketId}`);
@@ -222,6 +247,21 @@ export async function updateTicketField(
 
   const { error } = await supabase.from("tickets").update(update).eq("id", ticketId);
   if (error) return { error: error.message };
+
+  if (field === "status") {
+    const admin = createAdminClient()
+    admin.from('tickets').select('org_id, ticket_number, title, status, priority').eq('id', ticketId).single()
+      .then(({ data: t }) => {
+        if (t) dispatchWebhookEvent(t.org_id, 'ticket.status_changed', {
+          id:       ticketId,
+          number:   t.ticket_number ?? '',
+          title:    t.title,
+          status:   t.status,
+          priority: t.priority,
+          url:      `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticketId}`,
+        }).catch(() => {})
+      })
+  }
 
   revalidatePath(`/tickets/${ticketId}`);
   revalidatePath("/tickets");
