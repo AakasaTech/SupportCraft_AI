@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Sparkles,
   Mail,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { href: "/email",          label: "Email",          icon: Mail         },
   { href: "/ai",             label: "AI Platform",    icon: Sparkles     },
   { href: "/settings",       label: "Settings",       icon: Settings },
+  { href: "/help",           label: "Help",           icon: HelpCircle   },
 ];
 
 interface SidebarProps {
