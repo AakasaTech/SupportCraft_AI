@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   const { data: org } = await supabase
     .from("organizations")
-    .select("plan")
+    .select("plan, freepass_plan, freepass_until")
     .eq("id", profile.org_id)
     .single();
 
@@ -31,7 +31,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
 
-  const { allowed, reason } = await checkAIAccess(profile.org_id, org.plan, "ai_suggested_responses");
+  const { resolveEffectivePlan } = await import("@/lib/plans");
+  const effectivePlan = resolveEffectivePlan({ plan: org.plan as import("@/types/database").OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+
+  const { allowed, reason } = await checkAIAccess(profile.org_id, effectivePlan, "ai_suggested_responses");
   if (!allowed) {
     return NextResponse.json({ error: reason }, { status: 429 });
   }

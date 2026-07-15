@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Sparkles, Zap, DollarSign, Clock, TrendingUp, Database } from "lucide-react";
 import { requireAuth } from "@/lib/auth/helpers";
 import { getMonthlyStats } from "@/lib/ai/usage";
-import { canUseAI } from "@/lib/plans";
+import { canUseAI, resolveEffectivePlan, PLAN_NAMES } from "@/lib/plans";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import type { OrgPlan } from "@/types/database";
@@ -46,7 +46,7 @@ export default async function AIPlatformPage() {
   const supabase = await createClient();
   const { data: org } = await supabase
     .from("organizations")
-    .select("name, plan")
+    .select("name, plan, freepass_plan, freepass_until")
     .eq("id", profile.org_id)
     .single();
 
@@ -61,7 +61,9 @@ export default async function AIPlatformPage() {
   const cacheHits      = logs.filter((l) => l.cached).length;
   const cacheRate      = totalCalls > 0 ? Math.round((cacheHits / totalCalls) * 100) : 0;
 
-  const plan       = (org?.plan ?? "free") as OrgPlan;
+  const plan       = org
+    ? resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null })
+    : ("free" as OrgPlan);
   const limit      = PLAN_LIMITS[plan] ?? 50;
   const pct        = Math.min(100, Math.round((totalCalls / limit) * 100));
   const allowed    = canUseAI(plan, totalCalls);

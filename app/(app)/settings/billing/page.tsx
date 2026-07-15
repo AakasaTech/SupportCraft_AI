@@ -5,7 +5,8 @@ import { Header } from "@/components/shared/Header";
 import { PlanCards } from "@/features/billing/components/PlanCards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PLAN_NAMES } from "@/lib/plans";
+import { PLAN_NAMES, resolveEffectivePlan } from "@/lib/plans";
+import type { OrgPlan } from "@/types/database";
 import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Billing" };
@@ -31,7 +32,7 @@ export default async function BillingPage({
   const [{ data: org }, { data: subscription }] = await Promise.all([
     supabase
       .from("organizations")
-      .select("id, name, plan")
+      .select("id, name, plan, freepass_plan, freepass_until")
       .eq("id", profile.org_id)
       .single(),
     supabase
@@ -42,6 +43,9 @@ export default async function BillingPage({
   ]);
 
   if (!org) redirect("/login");
+
+  const effectivePlan = resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const hasFreepass = effectivePlan !== org.plan;
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -67,7 +71,12 @@ export default async function BillingPage({
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3">
-              <Badge className="text-sm px-3 py-1">{PLAN_NAMES[org.plan as keyof typeof PLAN_NAMES]}</Badge>
+              <Badge className="text-sm px-3 py-1">{PLAN_NAMES[effectivePlan]}</Badge>
+              {hasFreepass && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-2.5 py-0.5 text-xs font-medium">
+                  Free Pass
+                </span>
+              )}
               {subscription?.status && (
                 <span className="text-sm text-muted-foreground capitalize">
                   {subscription.status}
@@ -85,7 +94,7 @@ export default async function BillingPage({
           </CardContent>
         </Card>
 
-        <PlanCards currentPlan={org.plan} orgId={org.id} />
+        <PlanCards currentPlan={effectivePlan} orgId={org.id} />
       </div>
     </div>
   );

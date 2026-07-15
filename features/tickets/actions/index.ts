@@ -8,7 +8,7 @@ import { requireAuth } from "@/lib/auth/helpers";
 import { logAuditEvent } from "@/lib/audit";
 import { sendNewTicketEmail, sendTicketReplyEmail } from "@/lib/resend";
 import { getOrgEmail } from "@/lib/email/platform-provider";
-import { getPlanLimits } from "@/lib/plans";
+import { getPlanLimits, resolveEffectivePlan } from "@/lib/plans";
 import { dispatchWebhookEvent } from "@/lib/webhooks";
 import type { OrgPlan } from "@/types/database";
 import {
@@ -42,9 +42,10 @@ export async function createTicket(formData: FormData) {
 
   // Enforce monthly ticket limit for the Free plan
   const { data: org } = await supabase
-    .from("organizations").select("plan").eq("id", profile.org_id).single();
+    .from("organizations").select("plan, freepass_plan, freepass_until").eq("id", profile.org_id).single();
   if (org) {
-    const limits = getPlanLimits(org.plan as OrgPlan);
+    const effectivePlan = resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+    const limits = getPlanLimits(effectivePlan);
     if (limits.tickets !== Infinity) {
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
       const { count } = await supabase

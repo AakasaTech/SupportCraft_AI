@@ -17,10 +17,13 @@ export async function POST(request: Request) {
   if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
   const { data: org } = await supabase
-    .from("organizations").select("plan").eq("id", profile.org_id).single();
+    .from("organizations").select("plan, freepass_plan, freepass_until").eq("id", profile.org_id).single();
   if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
 
-  const { allowed, usage } = await checkAILimits(profile.org_id, org.plan);
+  const { resolveEffectivePlan } = await import("@/lib/plans");
+  const effectivePlan = resolveEffectivePlan({ plan: org.plan as import("@/types/database").OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+
+  const { allowed, usage } = await checkAILimits(profile.org_id, effectivePlan);
   if (!allowed) {
     return NextResponse.json(
       { error: "Monthly AI usage limit reached. Upgrade your plan.", usage },

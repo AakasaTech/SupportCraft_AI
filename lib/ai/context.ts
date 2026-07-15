@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { resolveEffectivePlan } from "@/lib/plans";
+import type { OrgPlan } from "@/types/database";
 import type { TicketContext } from "./types";
 
 export async function buildTicketContext(
@@ -25,7 +27,7 @@ export async function buildTicketContext(
 
     admin
       .from("organizations")
-      .select("id, name, plan")
+      .select("id, name, plan, freepass_plan, freepass_until")
       .eq("id", orgId)
       .single(),
 
@@ -72,6 +74,6 @@ export async function buildTicketContext(
     },
     conversation,
     kbArticles,
-    org: { id: org.id, name: org.name, plan: org.plan },
+    org: { id: org.id, name: org.name, plan: resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null }) },
   };
 }

@@ -20,7 +20,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signOut } from "@/features/auth/actions";
-import type { Profile, Organization } from "@/types/database";
+import { resolveEffectivePlan, PLAN_NAMES } from "@/lib/plans";
+import type { Profile, Organization, OrgPlan } from "@/types/database";
 
 const NAV_ITEMS = [
   { href: "/dashboard",      label: "Dashboard",      icon: LayoutDashboard },
@@ -64,7 +65,7 @@ export function Sidebar({ profile, organization }: SidebarProps) {
               {organization.name}
             </p>
             <p className="text-xs text-muted-foreground capitalize">
-              {organization.plan} plan
+              {PLAN_NAMES[resolveEffectivePlan({ plan: organization.plan as OrgPlan, freepass_plan: organization.freepass_plan ?? null, freepass_until: organization.freepass_until ?? null })]} plan
             </p>
           </div>
         </div>
