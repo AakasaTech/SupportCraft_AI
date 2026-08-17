@@ -75,7 +75,7 @@ export function SessionTimeout() {
           <div>
             <h2 className="text-base font-semibold text-foreground">Session expiring soon</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              You've been inactive. You'll be signed out in{' '}
+              You&apos;ve been inactive. You&apos;ll be signed out in{' '}
               <span className="font-mono font-semibold text-foreground">{display}</span>.
             </p>
           </div>
