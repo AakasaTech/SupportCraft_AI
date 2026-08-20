@@ -1,6 +1,10 @@
 # SupportCraft AI
 
-AI-powered help desk SaaS built on Next.js 15, Supabase, and OpenAI / Anthropic.
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-orange.svg)](LICENSE.md)
+
+AI-powered help desk SaaS built on Next.js 15, Supabase, and OpenAI / Anthropic. Part of the [Aakasa Digital](https://aakasa.dev) product family.
+
+> **⚠️ Non-Commercial Only:** This repository is source-available for personal, educational, research, and evaluation purposes. **Commercial use requires a paid license.** See [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md) or contact [licenses@aakasa.dev](mailto:licenses@aakasa.dev) for details.
 
 ---
 
