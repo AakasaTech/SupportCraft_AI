@@ -22,6 +22,9 @@ supabase/.env
 supabase/.branches/
 supabase/.temp/
 
+# ─── Prisma ──────────────────────────────────────────────────────────────────
+lib/generated/prisma/
+
 # ─── Cloudflare Workers ──────────────────────────────────────────────────────
 workers/email-inbound/.wrangler/
 workers/email-inbound/dist/

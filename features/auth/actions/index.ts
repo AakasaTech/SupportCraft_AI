@@ -1,8 +1,13 @@
 "use server";
 
+import { randomBytes, createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { AuthError } from "next-auth";
+import { prisma } from "@/lib/prisma";
+import { signIn as nextAuthSignIn, signOut as nextAuthSignOut } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth/password";
+import { sendEmail, getEmailFrom } from "@/lib/email/mailer";
 import { slugify } from "@/lib/utils";
 import {
   loginSchema,
@@ -11,9 +16,9 @@ import {
   updatePasswordSchema,
 } from "../schemas";
 
-export async function signIn(formData: FormData) {
-  const supabase = await createClient();
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+export async function signIn(formData: FormData) {
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -24,10 +29,16 @@ export async function signIn(formData: FormData) {
   }
 
   try {
-    const { error } = await supabase.auth.signInWithPassword(parsed.data);
-    if (error) return { error: error.message };
+    await nextAuthSignIn("credentials", {
+      email: parsed.data.email,
+      password: parsed.data.password,
+      redirect: false,
+    });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Sign in failed. Please try again." };
+    if (e instanceof AuthError) {
+      return { error: "Invalid email or password" };
+    }
+    throw e;
   }
 
   revalidatePath("/", "layout");
@@ -35,8 +46,6 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
-  const supabase = await createClient();
-
   const parsed = registerSchema.safeParse({
     fullName: formData.get("fullName"),
     orgName: formData.get("orgName"),
@@ -50,56 +59,40 @@ export async function signUp(formData: FormData) {
 
   const { fullName, orgName, email, password } = parsed.data;
 
-  let userId: string;
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return { error: "An account with this email already exists" };
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-      },
+    const passwordHash = await hashPassword(password);
+    const slug = `${slugify(orgName)}-${Math.random().toString(36).slice(2, 7)}`;
+
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { email, passwordHash } });
+      const org = await tx.organization.create({ data: { name: orgName, slug } });
+      await tx.profile.create({
+        data: {
+          userId: user.id,
+          organizationId: org.id,
+          role: "owner",
+          fullName,
+          email,
+        },
+      });
+      await tx.subscription.create({
+        data: { organizationId: org.id, plan: "free", status: "active" },
+      });
     });
-
-    if (authError) return { error: authError.message };
-    if (!authData.user) return { error: "Failed to create account" };
-
-    userId = authData.user.id;
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Registration failed. Please try again." };
   }
 
-  // Use admin client for org/profile — user has no profile yet so
-  // get_user_org_id() returns null and RLS blocks the anon-key client.
   try {
-    const admin = createAdminClient();
-    const slug = slugify(orgName) + "-" + Math.random().toString(36).slice(2, 7);
-
-    const { data: org, error: orgError } = await admin
-      .from("organizations")
-      .insert({ name: orgName, slug })
-      .select("id")
-      .single();
-
-    if (orgError) return { error: `Failed to create organization: ${orgError.message}` };
-
-    const { error: profileError } = await admin.from("profiles").insert({
-      id: userId,
-      org_id: org.id,
-      role: "owner",
-      full_name: fullName,
-      email,
-    });
-
-    if (profileError) return { error: `Failed to create profile: ${profileError.message}` };
-
-    await admin.from("subscriptions").insert({
-      org_id: org.id,
-      plan: "free",
-      status: "active",
-    });
+    await nextAuthSignIn("credentials", { email, password, redirect: false });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Setup failed. Please try again." };
+    if (e instanceof AuthError) {
+      return { error: "Account created — please sign in." };
+    }
+    throw e;
   }
 
   revalidatePath("/", "layout");
@@ -107,15 +100,12 @@ export async function signUp(formData: FormData) {
 }
 
 export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  await nextAuthSignOut({ redirect: false });
   revalidatePath("/", "layout");
   redirect("/login");
 }
 
 export async function resetPassword(formData: FormData) {
-  const supabase = await createClient();
-
   const parsed = forgotPasswordSchema.safeParse({
     email: formData.get("email"),
   });
@@ -124,71 +114,71 @@ export async function resetPassword(formData: FormData) {
     return { error: parsed.error.errors[0].message };
   }
 
-  try {
-    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/update-password`,
+  const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+
+  // Always report success, whether or not the account exists — avoids leaking
+  // account existence to an unauthenticated caller.
+  if (user) {
+    const rawToken = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
     });
 
-    if (error) return { error: error.message };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Request failed. Please try again." };
+    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/update-password?token=${rawToken}`;
+    const from = `SupportCraft AI <${getEmailFrom()}>`;
+    const html = `
+      <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+        <h2 style="color:#1a1a1a;">Reset your password</h2>
+        <p style="color:#555;">Click the button below to set a new password. This link expires in 1 hour and can only be used once.</p>
+        <a href="${resetUrl}"
+           style="display:inline-block;background:#6d28d9;color:#fff;padding:12px 24px;
+                  border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">
+          Reset password
+        </a>
+        <p style="color:#999;font-size:12px;">If you didn't request this, you can safely ignore this email.</p>
+      </div>
+    `;
+    const text = `Reset your password: ${resetUrl}\n\nThis link expires in 1 hour and can only be used once.`;
+
+    await sendEmail({ from, to: user.email!, subject: "Reset your SupportCraft AI password", html, text });
   }
 
   return { success: "Check your email for the password reset link" };
 }
 
-// Custom Google flow: redirects to /api/auth/google which uses PKCE + nonce,
-// showing supportcraft.aakasa.dev on Google's account chooser instead of Supabase's domain.
 export async function signInWithGoogleAction() {
-  redirect("/api/auth/google");
-}
-
-export async function signInWithOAuth(provider: "azure") {
-  const supabase = await createClient();
-
-  try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-        scopes: "openid profile email",
-      },
-    });
-
-    if (error) return { error: error.message };
-    if (data.url) return { url: data.url };
-    return { error: "OAuth setup failed" };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "OAuth failed. Please try again." };
-  }
+  await nextAuthSignIn("google", { redirectTo: "/dashboard" });
 }
 
 export async function signInWithMagicLink(formData: FormData) {
-  const supabase = await createClient();
-
   const email = formData.get("email");
   if (!email || typeof email !== "string") return { error: "Email is required" };
 
   try {
-    const { error } = await supabase.auth.signInWithOtp({
+    await nextAuthSignIn("email", {
       email,
-      options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/portal/dashboard`,
-      },
+      redirect: false,
+      redirectTo: "/portal/dashboard",
     });
-
-    if (error) return { error: error.message };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Request failed. Please try again." };
+    if (e instanceof AuthError) {
+      return { error: "Could not send the magic link. Please try again." };
+    }
+    throw e;
   }
 
   return { success: "Check your email for the magic link" };
 }
 
 export async function updatePassword(formData: FormData) {
-  const supabase = await createClient();
-
   const parsed = updatePasswordSchema.safeParse({
+    token: formData.get("token"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
   });
@@ -197,14 +187,34 @@ export async function updatePassword(formData: FormData) {
     return { error: parsed.error.errors[0].message };
   }
 
-  try {
-    const { error } = await supabase.auth.updateUser({
-      password: parsed.data.password,
-    });
+  const tokenHash = createHash("sha256").update(parsed.data.token).digest("hex");
+  const resetToken = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
 
-    if (error) return { error: error.message };
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
+    return { error: "This reset link is invalid or has expired. Please request a new one." };
+  }
+
+  const passwordHash = await hashPassword(parsed.data.password);
+  const user = await prisma.user.update({
+    where: { id: resetToken.userId },
+    data: { passwordHash },
+  });
+  await prisma.passwordResetToken.update({
+    where: { id: resetToken.id },
+    data: { usedAt: new Date() },
+  });
+
+  try {
+    await nextAuthSignIn("credentials", {
+      email: user.email,
+      password: parsed.data.password,
+      redirect: false,
+    });
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Update failed. Please try again." };
+    if (e instanceof AuthError) {
+      redirect("/login");
+    }
+    throw e;
   }
 
   redirect("/dashboard");

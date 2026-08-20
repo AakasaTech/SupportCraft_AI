@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import type { TicketStatus, TicketPriority, TicketSource } from "@/types/database";
+import { prisma } from "@/lib/prisma";
+import type { Prisma, TicketStatus, TicketPriority } from "@/lib/generated/prisma/client";
 
 // ─── Filter / sort params ─────────────────────────────────────────────────────
 
@@ -11,11 +11,11 @@ export interface TicketListParams {
   customerId?: string;
   department?: string;
   category?:   string;
-  source?:     TicketSource;
+  source?:     string;
   unassigned?: boolean;
   dateFrom?:   string;
   dateTo?:     string;
-  sort?:       "created_at" | "updated_at" | "priority" | "status";
+  sort?:       "created_at" | "updated_at" | "priority" | "status" | "ticket_number";
   order?:      "asc" | "desc";
   page?:       number;
   limit?:      number;
@@ -23,10 +23,17 @@ export interface TicketListParams {
 
 const PAGE_SIZE = 25;
 
+const SORT_FIELD_MAP: Record<NonNullable<TicketListParams["sort"]>, "createdAt" | "updatedAt" | "priority" | "status" | "ticketNumber"> = {
+  created_at: "createdAt",
+  updated_at: "updatedAt",
+  priority: "priority",
+  status: "status",
+  ticket_number: "ticketNumber",
+};
+
 // ─── Ticket list (paginated) ──────────────────────────────────────────────────
 
 export async function getTickets(orgId: string, params: TicketListParams = {}) {
-  const supabase = await createClient();
   const {
     status, priority, search, assigneeId, customerId,
     department, category, source, unassigned,
@@ -35,187 +42,167 @@ export async function getTickets(orgId: string, params: TicketListParams = {}) {
     page = 1, limit = PAGE_SIZE,
   } = params;
 
-  let query = supabase
-    .from("tickets")
-    .select(
-      `id, ticket_number, title, status, priority, category, department, source,
-       tags, created_at, updated_at, due_date, first_response_at,
-       customer:customers!customer_id(id, name, email, company),
-       assignee:profiles!tickets_assignee_id_fkey(id, full_name, avatar_url)`,
-      { count: "exact" }
-    )
-    .eq("org_id", orgId)
-    .eq("is_spam", false);
+  const where: Prisma.TicketWhereInput = {
+    organizationId: orgId,
+    isSpam: false,
+  };
 
-  // Filters
-  if (status && status !== "all") query = query.eq("status", status);
-  if (priority)   query = query.eq("priority", priority);
-  if (department) query = query.eq("department", department);
-  if (category)   query = query.eq("category", category);
-  if (source)     query = query.eq("source", source);
-  if (assigneeId) query = query.eq("assignee_id", assigneeId);
-  if (customerId) query = query.eq("customer_id", customerId);
-  if (unassigned) query = query.is("assignee_id", null);
-  if (dateFrom)   query = query.gte("created_at", dateFrom);
-  if (dateTo)     query = query.lte("created_at", dateTo);
+  if (status && status !== "all") where.status = status;
+  if (priority) where.priority = priority;
+  if (department) where.department = department;
+  if (category) where.category = category;
+  if (source) where.source = source;
+  if (assigneeId) where.assigneeId = assigneeId;
+  if (customerId) where.customerId = customerId;
+  if (unassigned) where.assigneeId = null;
+  if (dateFrom || dateTo) {
+    where.createdAt = {
+      ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+      ...(dateTo ? { lte: new Date(dateTo) } : {}),
+    };
+  }
 
-  // Full-text search
+  // Full-text search: resolve matching ticket IDs via the trigger-maintained
+  // search_vector column (Prisma has no native tsvector query support), then
+  // fold that into the normal Prisma where-clause so all other filters,
+  // sorting, and pagination stay type-safe.
   if (search?.trim()) {
-    query = query.textSearch("search_vector", search.trim(), {
-      type: "websearch",
-      config: "english",
-    });
+    const matches = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM tickets
+      WHERE org_id = ${orgId}
+        AND search_vector @@ websearch_to_tsquery('english', ${search.trim()})
+    `;
+    where.id = { in: matches.map((m) => m.id) };
   }
 
-  // Sort
-  const ascending = order === "asc";
-  if (sort === "priority") {
-    // Map priority to numeric rank for sorting
-    query = query.order("priority", { ascending });
-  } else {
-    query = query.order(sort, { ascending });
-  }
+  const skip = (page - 1) * limit;
 
-  // Pagination
-  const from = (page - 1) * limit;
-  query = query.range(from, from + limit - 1);
-
-  const { data, error, count } = await query;
-  if (error) throw error;
+  const [tickets, total] = await prisma.$transaction([
+    prisma.ticket.findMany({
+      where,
+      select: {
+        id: true, ticketNumber: true, title: true, status: true, priority: true,
+        category: true, department: true, source: true, tags: true,
+        createdAt: true, updatedAt: true, dueDate: true, firstResponseAt: true,
+        customer: { select: { id: true, name: true, email: true, company: true } },
+        assignee: { select: { id: true, fullName: true, avatarUrl: true } },
+      },
+      orderBy: { [SORT_FIELD_MAP[sort]]: order },
+      skip,
+      take: limit,
+    }),
+    prisma.ticket.count({ where }),
+  ]);
 
   return {
-    tickets: data ?? [],
-    total:   count ?? 0,
+    tickets,
+    total,
     page,
-    pages:   Math.ceil((count ?? 0) / limit),
+    pages: Math.ceil(total / limit),
   };
 }
 
 // ─── Ticket detail ────────────────────────────────────────────────────────────
 
 export async function getTicketById(ticketId: string) {
-  const supabase = await createClient();
+  const [ticket, messages, attachments] = await Promise.all([
+    prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        customer: true,
+        assignee: {
+          select: { id: true, fullName: true, avatarUrl: true, email: true, role: true, jobTitle: true },
+        },
+      },
+    }),
+    prisma.ticketMessage.findMany({
+      where: { ticketId },
+      include: {
+        author: { select: { id: true, fullName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.ticketAttachment.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
-  const { data: ticket, error: ticketError } = await supabase
-    .from("tickets")
-    .select(
-      `*, customer:customers(*),
-       assignee:profiles!tickets_assignee_id_fkey(id, full_name, avatar_url, email, role, job_title)`
-    )
-    .eq("id", ticketId)
-    .single();
-
-  if (ticketError) throw ticketError;
-
-  const { data: messages, error: msgError } = await supabase
-    .from("ticket_messages")
-    .select(
-      `*, author:profiles!ticket_messages_author_id_fkey(id, full_name, avatar_url, role)`
-    )
-    .eq("ticket_id", ticketId)
-    .order("created_at", { ascending: true });
-
-  if (msgError) throw msgError;
-
-  const { data: attachments } = await supabase
-    .from("ticket_attachments")
-    .select("*")
-    .eq("ticket_id", ticketId)
-    .order("created_at", { ascending: false });
-
-  return { ticket, messages: messages ?? [], attachments: attachments ?? [] };
+  return { ticket, messages, attachments };
 }
 
 // ─── Ticket stats ─────────────────────────────────────────────────────────────
 
 export async function getTicketStats(orgId: string) {
-  const supabase = await createClient();
+  const counts = await prisma.ticket.groupBy({
+    by: ["status"],
+    where: { organizationId: orgId, isSpam: false },
+    _count: { _all: true },
+  });
 
-  const { data, error } = await supabase
-    .from("tickets")
-    .select("status")
-    .eq("org_id", orgId)
-    .eq("is_spam", false);
-
-  if (error) throw error;
+  const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count._all]));
 
   return {
-    new:         data.filter((t) => t.status === "new").length,
-    open:        data.filter((t) => t.status === "open").length,
-    in_progress: data.filter((t) => t.status === "in_progress").length,
-    pending:     data.filter((t) => t.status === "pending").length,
-    resolved:    data.filter((t) => t.status === "resolved").length,
-    closed:      data.filter((t) => t.status === "closed").length,
-    total:       data.length,
+    new: byStatus.new ?? 0,
+    open: byStatus.open ?? 0,
+    in_progress: byStatus.in_progress ?? 0,
+    pending: byStatus.pending ?? 0,
+    resolved: byStatus.resolved ?? 0,
+    closed: byStatus.closed ?? 0,
+    total: counts.reduce((sum, c) => sum + c._count._all, 0),
   };
 }
 
 // ─── Related data ─────────────────────────────────────────────────────────────
 
 export async function getAgents(orgId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, full_name, avatar_url, role, email")
-    .eq("org_id", orgId)
-    .in("role", ["owner", "admin", "agent"])
-    .order("full_name");
-  return data ?? [];
+  return prisma.profile.findMany({
+    where: { organizationId: orgId, role: { in: ["owner", "admin", "agent"] } },
+    select: { id: true, fullName: true, avatarUrl: true, role: true, email: true },
+    orderBy: { fullName: "asc" },
+  });
 }
 
 export async function getDepartments(orgId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("departments")
-    .select("*")
-    .eq("org_id", orgId)
-    .order("name");
-  return data ?? [];
+  return prisma.department.findMany({
+    where: { organizationId: orgId },
+    orderBy: { name: "asc" },
+  });
 }
 
 export async function getTicketTemplates(orgId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("ticket_templates")
-    .select("*")
-    .eq("org_id", orgId)
-    .order("name");
-  return data ?? [];
+  return prisma.ticketTemplate.findMany({
+    where: { organizationId: orgId },
+    orderBy: { name: "asc" },
+  });
 }
 
 export async function getSavedViews(orgId: string, userId: string) {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("saved_views")
-    .select("*")
-    .eq("org_id", orgId)
-    .or(`user_id.eq.${userId},is_shared.eq.true`)
-    .order("name");
-  return data ?? [];
+  return prisma.savedView.findMany({
+    where: {
+      organizationId: orgId,
+      OR: [{ userId }, { isShared: true }],
+    },
+    orderBy: { name: "asc" },
+  });
 }
 
 export async function getCustomerTickets(customerId: string, excludeTicketId?: string) {
-  const supabase = await createClient();
-  let query = supabase
-    .from("tickets")
-    .select("id, ticket_number, title, status, priority, created_at")
-    .eq("customer_id", customerId)
-    .order("created_at", { ascending: false })
-    .limit(5);
-  if (excludeTicketId) query = query.neq("id", excludeTicketId);
-  const { data } = await query;
-  return data ?? [];
+  return prisma.ticket.findMany({
+    where: {
+      customerId,
+      ...(excludeTicketId ? { id: { not: excludeTicketId } } : {}),
+    },
+    select: { id: true, ticketNumber: true, title: true, status: true, priority: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
 }
 
 export async function getActivityLog(ticketId: string) {
-  const supabase = await createClient();
-
-  // Activity log from audit_logs for this ticket
-  const { data } = await supabase
-    .from("audit_logs")
-    .select("*")
-    .filter("metadata->ticketId", "eq", `"${ticketId}"`)
-    .order("created_at", { ascending: false })
-    .limit(30);
-  return data ?? [];
+  return prisma.auditLog.findMany({
+    where: { metadata: { path: ["ticketId"], equals: ticketId } },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  });
 }

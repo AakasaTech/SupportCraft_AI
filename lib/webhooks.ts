@@ -5,7 +5,7 @@
 import { createHmac } from 'node:crypto'
 import http  from 'node:http'
 import https from 'node:https'
-import { createAdminClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/prisma'
 
 export type WebhookEvent =
   | 'ticket.created'
@@ -77,16 +77,12 @@ export async function dispatchWebhookEvent(
   event: WebhookEvent,
   data:  WebhookTicketData,
 ): Promise<void> {
-  const db = createAdminClient()
+  const hooks = await prisma.outboundWebhook.findMany({
+    where: { organizationId: orgId, enabled: true, events: { has: event } },
+    select: { id: true, url: true, secret: true },
+  })
 
-  const { data: hooks } = await db
-    .from('outbound_webhooks')
-    .select('id, url, secret')
-    .eq('org_id', orgId)
-    .eq('enabled', true)
-    .contains('events', [event])
-
-  if (!hooks?.length) return
+  if (!hooks.length) return
 
   const payload: WebhookPayload = { event, timestamp: new Date().toISOString(), data }
   const body = JSON.stringify(payload)
@@ -94,23 +90,19 @@ export async function dispatchWebhookEvent(
   await Promise.all(
     hooks.map(async (hook) => {
       const status = await deliver(hook.url, body, sign(hook.secret, body))
-      await db
-        .from('outbound_webhooks')
-        .update({ last_fired_at: new Date().toISOString(), last_status: status })
-        .eq('id', hook.id)
+      await prisma.outboundWebhook.update({
+        where: { id: hook.id },
+        data: { lastFiredAt: new Date(), lastStatus: status },
+      })
     }),
   )
 }
 
 export async function testWebhookDelivery(webhookId: string, orgId: string): Promise<{ status: number }> {
-  const db = createAdminClient()
-
-  const { data: hook } = await db
-    .from('outbound_webhooks')
-    .select('url, secret')
-    .eq('id', webhookId)
-    .eq('org_id', orgId)
-    .single()
+  const hook = await prisma.outboundWebhook.findFirst({
+    where: { id: webhookId, organizationId: orgId },
+    select: { url: true, secret: true },
+  })
 
   if (!hook) return { status: 0 }
 
@@ -122,10 +114,10 @@ export async function testWebhookDelivery(webhookId: string, orgId: string): Pro
   const body   = JSON.stringify(payload)
   const status = await deliver(hook.url, body, sign(hook.secret, body))
 
-  await db
-    .from('outbound_webhooks')
-    .update({ last_fired_at: new Date().toISOString(), last_status: status })
-    .eq('id', webhookId)
+  await prisma.outboundWebhook.update({
+    where: { id: webhookId },
+    data: { lastFiredAt: new Date(), lastStatus: status },
+  })
 
   return { status }
 }

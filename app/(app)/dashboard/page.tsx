@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const { profile } = await requireAuth();
-  const orgId  = profile.org_id;
+  const orgId  = profile.organizationId;
   const userId = profile.id;
 
   return (

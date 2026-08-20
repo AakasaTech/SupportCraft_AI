@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { uploadFile } from "@/lib/storage";
 
 interface RawAttachment {
   filename:    string;
@@ -64,16 +65,19 @@ export async function processAttachments(params: {
       .replace(/[^a-zA-Z0-9._-]/g, "_")
       .slice(0, 100);
 
-    const storagePath = `attachments/${params.orgId}/${params.ticketId}/${Date.now()}_${safeFilename}`;
+    const storagePath = `email/${params.orgId}/${params.ticketId}/${Date.now()}_${safeFilename}`;
 
-    // Upload to Supabase Storage
-    const { error: uploadErr } = await admin.storage
-      .from("email-attachments")
-      .upload(storagePath, bytes, { contentType: normalizedType, upsert: false });
+    try {
+      await uploadFile(storagePath, bytes, normalizedType);
+    } catch {
+      continue;
+    }
 
-    if (uploadErr) continue;
-
-    // Record in DB
+    // Record in DB — deliberately still the Supabase-hosted Postgres, not
+    // Prisma/Neon: the Ticket/EmailMessage rows this references are written
+    // by ticket-service.ts to that same database, so pointing this insert at
+    // Neon would violate the FK constraints (those parent rows don't exist
+    // there). Move together once the rest of the email pipeline migrates.
     const { data: record } = await admin
       .from("email_attachments")
       .insert({

@@ -1,12 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { slugify } from "@/lib/utils";
 import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { signIn } from "@/lib/auth";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
 const acceptSchema = z.object({
-  token: z.string().uuid(),
+  token: z.string().min(1),
   fullName: z.string().min(2, "Name must be at least 2 characters"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
@@ -23,67 +24,43 @@ export async function acceptInvitation(formData: FormData) {
   }
 
   const { token, fullName, password } = parsed.data;
-  const admin = createAdminClient();
 
-  // Validate the invitation
-  const { data: invitation, error: invErr } = await admin
-    .from("invitations")
-    .select("id, org_id, email, role, expires_at, accepted_at")
-    .eq("token", token)
-    .single();
+  const invitation = await prisma.invitation.findUnique({ where: { token } });
+  if (!invitation) return { error: "Invalid invitation link" };
+  if (invitation.acceptedAt) return { error: "This invitation has already been used" };
+  if (invitation.expiresAt < new Date()) return { error: "expired" };
 
-  if (invErr || !invitation) return { error: "Invalid invitation link" };
-  if (invitation.accepted_at) return { error: "This invitation has already been used" };
-  if (new Date(invitation.expires_at) < new Date()) {
-    return { error: "expired" };
+  const existingUser = await prisma.user.findUnique({ where: { email: invitation.email } });
+  if (existingUser) {
+    return { error: "An account with this email already exists. Please sign in and join via the invitation link." };
   }
 
-  // Create the auth user
-  const supabase = await createClient();
-  let userId: string;
-
   try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: invitation.email,
-      password,
-      options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-        data: { full_name: fullName },
-      },
+    const passwordHash = await hashPassword(password);
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { email: invitation.email, passwordHash },
+      });
+      await tx.profile.create({
+        data: {
+          userId: user.id,
+          organizationId: invitation.organizationId,
+          role: invitation.role,
+          fullName,
+          email: invitation.email,
+        },
+      });
+      await tx.invitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      });
     });
-
-    if (authError) {
-      // If user already exists, try to sign them in instead
-      if (authError.message.includes("already registered")) {
-        return { error: "An account with this email already exists. Please sign in and join via the invitation link." };
-      }
-      return { error: authError.message };
-    }
-    if (!authData.user) return { error: "Failed to create account" };
-    userId = authData.user.id;
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Registration failed. Please try again." };
-  }
-
-  // Create profile and mark invitation accepted
-  try {
-    const { error: profileError } = await admin.from("profiles").insert({
-      id: userId,
-      org_id: invitation.org_id,
-      role: invitation.role as "admin" | "agent" | "viewer",
-      full_name: fullName,
-      email: invitation.email,
-    });
-
-    if (profileError) return { error: `Failed to create profile: ${profileError.message}` };
-
-    await admin
-      .from("invitations")
-      .update({ accepted_at: new Date().toISOString() })
-      .eq("id", invitation.id);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Setup failed. Please try again." };
   }
+
+  const result = await signIn("credentials", { email: invitation.email, password, redirect: false });
+  if (result?.error) return { error: "Account created — please sign in." };
 
   redirect("/dashboard");
 }
@@ -95,55 +72,42 @@ export async function acceptInvitationExistingUser(formData: FormData) {
   if (!token || typeof token !== "string") return { error: "Invalid token" };
   if (!password || typeof password !== "string") return { error: "Password is required" };
 
-  const admin = createAdminClient();
-
-  const { data: invitation } = await admin
-    .from("invitations")
-    .select("id, org_id, email, role, expires_at, accepted_at")
-    .eq("token", token)
-    .single();
-
+  const invitation = await prisma.invitation.findUnique({ where: { token } });
   if (!invitation) return { error: "Invalid invitation link" };
-  if (invitation.accepted_at) return { error: "This invitation has already been used" };
-  if (new Date(invitation.expires_at) < new Date()) return { error: "expired" };
+  if (invitation.acceptedAt) return { error: "This invitation has already been used" };
+  if (invitation.expiresAt < new Date()) return { error: "expired" };
 
-  const supabase = await createClient();
+  const user = await prisma.user.findUnique({ where: { email: invitation.email } });
+  if (!user?.passwordHash) return { error: "No account found for this email" };
+
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) return { error: "Incorrect password" };
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: invitation.email,
-      password,
-    });
-    if (error) return { error: error.message };
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Authentication failed" };
-
-    // Update the profile's org (switching orgs is not supported;
-    // only add to org if no profile exists yet)
-    const { data: existing } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("id", user.id)
-      .single();
-
-    if (!existing) {
-      await admin.from("profiles").insert({
-        id: user.id,
-        org_id: invitation.org_id,
-        role: invitation.role as "admin" | "agent" | "viewer",
-        full_name: user.user_metadata?.full_name ?? invitation.email.split("@")[0],
-        email: invitation.email,
+    // Switching orgs is not supported; only add a profile if none exists yet.
+    const existingProfile = await prisma.profile.findUnique({ where: { userId: user.id } });
+    if (!existingProfile) {
+      await prisma.profile.create({
+        data: {
+          userId: user.id,
+          organizationId: invitation.organizationId,
+          role: invitation.role,
+          fullName: user.email?.split("@")[0] ?? invitation.email.split("@")[0],
+          email: invitation.email,
+        },
       });
     }
 
-    await admin
-      .from("invitations")
-      .update({ accepted_at: new Date().toISOString() })
-      .eq("id", invitation.id);
+    await prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { acceptedAt: new Date() },
+    });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed. Please try again." };
   }
+
+  const result = await signIn("credentials", { email: invitation.email, password, redirect: false });
+  if (result?.error) return { error: "Joined — please sign in." };
 
   redirect("/dashboard");
 }
@@ -151,15 +115,11 @@ export async function acceptInvitationExistingUser(formData: FormData) {
 // Fetch invitation details for display (no auth required)
 export async function getInvitationByToken(token: string) {
   try {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from("invitations")
-      .select("id, email, role, expires_at, accepted_at, org_id, organizations(name, slug)")
-      .eq("token", token)
-      .single();
-
-    if (error || !data) return null;
-    return data;
+    const invitation = await prisma.invitation.findUnique({
+      where: { token },
+      include: { organization: { select: { name: true, slug: true } } },
+    });
+    return invitation;
   } catch {
     return null;
   }

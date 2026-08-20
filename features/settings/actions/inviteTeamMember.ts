@@ -1,43 +1,45 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { sendInvitationEmail } from "@/lib/resend";
 import { inviteTeamMemberSchema } from "../schemas";
 import { canAddAgent, getPlanLimits, PLAN_NAMES, resolveEffectivePlan } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function inviteTeamMember(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return { error: "Unauthorized" };
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("org_id, role, full_name")
-    .eq("id", user.id)
-    .single();
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { organizationId: true, role: true, fullName: true },
+  });
 
   if (!profile || !["owner", "admin"].includes(profile.role)) {
     return { error: "Only admins can invite team members" };
   }
 
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("name, plan, freepass_plan, freepass_until")
-    .eq("id", profile.org_id)
-    .single();
+  const org = await prisma.organization.findUnique({
+    where: { id: profile.organizationId },
+    select: { name: true, plan: true, freepassPlan: true, freepassUntil: true },
+  });
 
   if (!org) return { error: "Organization not found" };
 
-  const effectivePlan = resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const effectivePlan = resolveEffectivePlan({
+    plan: org.plan,
+    freepass_plan: org.freepassPlan,
+    freepass_until: org.freepassUntil?.toISOString() ?? null,
+  });
 
-  const { data: members, count: memberCount } = await supabase
-    .from("profiles")
-    .select("id", { count: "exact" })
-    .eq("org_id", profile.org_id);
+  const currentAgentCount = await prisma.profile.count({
+    where: { organizationId: profile.organizationId },
+  });
 
-  const currentAgentCount = memberCount ?? members?.length ?? 0;
   if (!canAddAgent(effectivePlan, currentAgentCount)) {
     const limit = getPlanLimits(effectivePlan).agents;
     const planName = PLAN_NAMES[effectivePlan];
@@ -53,35 +55,33 @@ export async function inviteTeamMember(formData: FormData) {
 
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const { data: existing } = await supabase
-    .from("invitations")
-    .select("id")
-    .eq("org_id", profile.org_id)
-    .eq("email", parsed.data.email)
-    .is("accepted_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .single();
+  const existing = await prisma.invitation.findFirst({
+    where: {
+      organizationId: profile.organizationId,
+      email: parsed.data.email,
+      acceptedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+  });
 
   if (existing) {
     return { error: "An active invitation already exists for this email" };
   }
 
-  const { data: invitation, error } = await supabase
-    .from("invitations")
-    .insert({
-      org_id: profile.org_id,
+  const invitation = await prisma.invitation.create({
+    data: {
+      organizationId: profile.organizationId,
       email: parsed.data.email,
       role: parsed.data.role,
-      invited_by: user.id,
-    })
-    .select("token")
-    .single();
-
-  if (error) return { error: error.message };
+      invitedById: userId,
+      expiresAt: new Date(Date.now() + SEVEN_DAYS_MS),
+    },
+    select: { token: true },
+  });
 
   await sendInvitationEmail({
     to: parsed.data.email,
-    inviterName: profile.full_name,
+    inviterName: profile.fullName,
     orgName: org.name,
     token: invitation.token,
     role: parsed.data.role,
@@ -92,47 +92,37 @@ export async function inviteTeamMember(formData: FormData) {
 }
 
 export async function revokeInvitation(invitationId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
 
-  const { error } = await supabase
-    .from("invitations")
-    .delete()
-    .eq("id", invitationId);
-
-  if (error) return { error: error.message };
+  await prisma.invitation.delete({ where: { id: invitationId } });
 
   revalidatePath("/settings/team");
   return { success: true };
 }
 
 export async function removeMember(memberId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return { error: "Unauthorized" };
 
-  if (memberId === user.id) {
-    return { error: "You cannot remove yourself" };
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("org_id, role")
-    .eq("id", user.id)
-    .single();
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { id: true, organizationId: true, role: true },
+  });
 
   if (!profile || profile.role !== "owner") {
     return { error: "Only the owner can remove members" };
   }
 
-  const { error } = await supabase
-    .from("profiles")
-    .delete()
-    .eq("id", memberId)
-    .eq("org_id", profile.org_id);
+  // memberId is a Profile.id, not a User.id — compare against the caller's own profile.
+  if (memberId === profile.id) {
+    return { error: "You cannot remove yourself" };
+  }
 
-  if (error) return { error: error.message };
+  await prisma.profile.deleteMany({
+    where: { id: memberId, organizationId: profile.organizationId },
+  });
 
   revalidatePath("/settings/team");
   return { success: true };

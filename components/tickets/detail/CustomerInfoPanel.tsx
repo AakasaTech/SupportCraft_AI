@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Mail, Phone, Building2, ExternalLink, Clock, TicketCheck } from "lucide-react";
 import { StatusBadge } from "@/components/tickets/shared/StatusBadge";
 import { getCustomerTickets } from "@/features/tickets/lib/queries";
-import type { Customer } from "@/types/database";
+import type { Customer } from "@/lib/generated/prisma/client";
 
 interface Props {
   customer:        Customer;
@@ -61,7 +61,7 @@ export async function CustomerInfoPanel({ customer, currentTicketId }: Props) {
           )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Clock size={12} className="shrink-0" />
-            Customer since {new Date(customer.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+            Customer since {customer.createdAt.toLocaleDateString("en-US", { month: "short", year: "numeric" })}
           </div>
         </div>
 
@@ -79,8 +79,8 @@ export async function CustomerInfoPanel({ customer, currentTicketId }: Props) {
                   href={`/tickets/${t.id}`}
                   className="flex items-center gap-2 p-2 rounded-lg hover:bg-hover transition-colors group"
                 >
-                  {t.ticket_number && (
-                    <span className="text-[10px] font-mono text-muted-foreground shrink-0">{t.ticket_number}</span>
+                  {t.ticketNumber && (
+                    <span className="text-[10px] font-mono text-muted-foreground shrink-0">{t.ticketNumber}</span>
                   )}
                   <span className="text-xs truncate flex-1 group-hover:text-primary">{t.title}</span>
                   <StatusBadge status={t.status} size="sm" showDot={false} />

@@ -3,9 +3,9 @@ import { Sparkles, Zap, DollarSign, Clock, TrendingUp, Database } from "lucide-r
 import { requireAuth } from "@/lib/auth/helpers";
 import { getMonthlyStats } from "@/lib/ai/usage";
 import { canUseAI, resolveEffectivePlan, PLAN_NAMES } from "@/lib/plans";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 
 export const metadata: Metadata = { title: "AI Platform" };
 
@@ -43,26 +43,24 @@ function formatCost(usd: number | null): string {
 export default async function AIPlatformPage() {
   const { profile } = await requireAuth();
 
-  const supabase = await createClient();
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("name, plan, freepass_plan, freepass_until")
-    .eq("id", profile.org_id)
-    .single();
+  const org = await prisma.organization.findUnique({
+    where: { id: profile.organizationId },
+    select: { name: true, plan: true, freepassPlan: true, freepassUntil: true },
+  });
 
-  const logs = await getMonthlyStats(profile.org_id);
+  const logs = await getMonthlyStats(profile.organizationId);
 
   const totalCalls     = logs.length;
-  const totalTokens    = logs.reduce((s, l) => s + (l.tokens_used    ?? 0), 0);
-  const totalCost      = logs.reduce((s, l) => s + (l.estimated_cost_usd ?? 0), 0);
+  const totalTokens    = logs.reduce((s, l) => s + (l.tokensUsed ?? 0), 0);
+  const totalCost      = logs.reduce((s, l) => s + (l.estimatedCostUsd ?? 0), 0);
   const avgLatency     = logs.length
-    ? Math.round(logs.reduce((s, l) => s + (l.latency_ms ?? 0), 0) / logs.length)
+    ? Math.round(logs.reduce((s, l) => s + (l.latencyMs ?? 0), 0) / logs.length)
     : 0;
   const cacheHits      = logs.filter((l) => l.cached).length;
   const cacheRate      = totalCalls > 0 ? Math.round((cacheHits / totalCalls) * 100) : 0;
 
   const plan       = org
-    ? resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null })
+    ? resolveEffectivePlan({ plan: org.plan, freepass_plan: org.freepassPlan, freepass_until: org.freepassUntil?.toISOString() ?? null })
     : ("free" as OrgPlan);
   const limit      = PLAN_LIMITS[plan] ?? 50;
   const pct        = Math.min(100, Math.round((totalCalls / limit) * 100));
@@ -74,8 +72,8 @@ export default async function AIPlatformPage() {
       const key = l.feature ?? "unknown";
       if (!acc[key]) acc[key] = { calls: 0, tokens: 0, cost: 0 };
       acc[key].calls++;
-      acc[key].tokens += l.tokens_used ?? 0;
-      acc[key].cost   += l.estimated_cost_usd ?? 0;
+      acc[key].tokens += l.tokensUsed ?? 0;
+      acc[key].cost   += l.estimatedCostUsd ?? 0;
       return acc;
     },
     {}
@@ -87,7 +85,7 @@ export default async function AIPlatformPage() {
     const d    = new Date(now);
     d.setDate(d.getDate() - (6 - i));
     const key  = d.toISOString().slice(0, 10);
-    const calls = logs.filter((l) => l.created_at?.startsWith(key)).length;
+    const calls = logs.filter((l) => l.createdAt.toISOString().startsWith(key)).length;
     return { label: d.toLocaleDateString([], { weekday: "short" }), calls };
   });
   const maxCalls = Math.max(1, ...days.map((d) => d.calls));
@@ -225,14 +223,14 @@ export default async function AIPlatformPage() {
                 {FEATURE_LABELS[log.feature] ?? log.feature}
               </span>
               <span className="text-xs text-muted-foreground shrink-0">{log.provider}/{log.model ?? "—"}</span>
-              <span className="text-xs text-muted-foreground shrink-0">{log.tokens_used ?? 0} tok</span>
-              <span className="text-xs text-muted-foreground shrink-0">{log.latency_ms ?? "—"}ms</span>
-              <span className="text-xs text-muted-foreground shrink-0">{formatCost(log.estimated_cost_usd)}</span>
+              <span className="text-xs text-muted-foreground shrink-0">{log.tokensUsed ?? 0} tok</span>
+              <span className="text-xs text-muted-foreground shrink-0">{log.latencyMs ?? "—"}ms</span>
+              <span className="text-xs text-muted-foreground shrink-0">{formatCost(log.estimatedCostUsd)}</span>
               {log.cached && (
                 <span className="text-[9px] bg-success/10 text-success px-1.5 py-0.5 rounded font-medium shrink-0">cached</span>
               )}
               <span className="text-xs text-muted-foreground ml-auto shrink-0">
-                {log.created_at ? new Date(log.created_at).toLocaleTimeString([], { timeStyle: "short" }) : ""}
+                {log.createdAt.toLocaleTimeString([], { timeStyle: "short" })}
               </span>
             </div>
           ))}

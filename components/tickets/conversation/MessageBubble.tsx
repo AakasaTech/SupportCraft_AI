@@ -3,14 +3,16 @@
 import { motion } from "framer-motion";
 import { Bot, User, UserCog, Lock, Clock, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TicketMessageWithAuthor } from "@/types/database";
+import type { getTicketById } from "@/features/tickets/lib/queries";
+
+export type TicketMessageWithAuthor = Awaited<ReturnType<typeof getTicketById>>["messages"][number];
 
 interface Props {
   message: TicketMessageWithAuthor;
   isFirst?: boolean;
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string | Date): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 2)  return "Just now";
@@ -52,10 +54,10 @@ function RolePill({ isAi, isCustomer, isInternal, role }: {
 }
 
 export function MessageBubble({ message, isFirst }: Props) {
-  const isAi       = message.is_ai;
-  const isCustomer = message.is_customer;
-  const isInternal = message.is_internal;
-  const authorName = message.author?.full_name ?? (isCustomer ? "Customer" : isAi ? "AI" : "Unknown");
+  const isAi       = message.isAi;
+  const isCustomer = message.isCustomer;
+  const isInternal = message.isInternal;
+  const authorName = message.author?.fullName ?? (isCustomer ? "Customer" : isAi ? "AI" : "Unknown");
 
     const isHtml = /<[a-z][\s\S]*>/i.test(message.content);
 
@@ -87,9 +89,9 @@ export function MessageBubble({ message, isFirst }: Props) {
           <RolePill isAi={isAi} isCustomer={isCustomer} isInternal={isInternal} role={message.author?.role} />
           <span className="flex items-center gap-1">
             <Clock size={10} />
-            {timeAgo(message.created_at)}
+            {timeAgo(message.createdAt)}
           </span>
-          {message.edited_at && (
+          {message.editedAt && (
             <span className="flex items-center gap-1 opacity-70"><Pencil size={9} />edited</span>
           )}
         </div>
@@ -122,7 +124,7 @@ export function SystemEvent({ message }: { message: TicketMessageWithAuthor }) {
       <span className="text-[11px] text-muted-foreground whitespace-nowrap flex items-center gap-1">
         <UserCog size={11} />
         {message.content}
-        <span className="opacity-60 ml-1">{timeAgo(message.created_at)}</span>
+        <span className="opacity-60 ml-1">{timeAgo(message.createdAt)}</span>
       </span>
       <div className="h-px flex-1 bg-border" />
     </motion.div>

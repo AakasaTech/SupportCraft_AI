@@ -19,10 +19,12 @@ import { PriorityBadge } from "@/components/tickets/shared/PriorityBadge";
 import { BulkActions } from "./BulkActions";
 import { cn } from "@/lib/utils";
 import { computeSLA, getSLABgColor } from "@/lib/sla";
-import type { TicketRow } from "@/types/database";
+import type { getTickets } from "@/features/tickets/lib/queries";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+type TicketRow = Awaited<ReturnType<typeof getTickets>>["tickets"][number];
 
 interface Props {
   tickets: TicketRow[];
@@ -31,7 +33,7 @@ interface Props {
   pages:   number;
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string | Date): string {
   const d = Date.now() - new Date(iso).getTime();
   const m = Math.floor(d / 60000);
   if (m < 60) return `${m}m ago`;
@@ -110,7 +112,7 @@ export function TicketTable({ tickets, total, page, pages }: Props) {
     {
       id: "ticket_number",
       header: () => <SortHeader label="#" field="ticket_number" />,
-      accessorKey: "ticket_number",
+      accessorKey: "ticketNumber",
       cell: ({ getValue }) => (
         <span className="font-mono text-[11px] text-muted-foreground">{getValue() as string ?? "—"}</span>
       ),
@@ -167,9 +169,9 @@ export function TicketTable({ tickets, total, page, pages }: Props) {
         return a ? (
           <div className="flex items-center gap-1.5">
             <div className="w-5 h-5 rounded-full bg-primary-subtle text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
-              {a.full_name.charAt(0)}
+              {a.fullName.charAt(0)}
             </div>
-            <span className="text-xs truncate max-w-[80px]">{a.full_name}</span>
+            <span className="text-xs truncate max-w-[80px]">{a.fullName}</span>
           </div>
         ) : <span className="text-[10px] text-muted-foreground">Unassigned</span>;
       },
@@ -180,7 +182,7 @@ export function TicketTable({ tickets, total, page, pages }: Props) {
       header: "SLA",
       cell: ({ row }) => {
         const t = row.original;
-        const sla = computeSLA(t.created_at, t.priority, t.first_response_at ?? null);
+        const sla = computeSLA(t.createdAt, t.priority, t.firstResponseAt ?? null);
         return (
           <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", getSLABgColor(sla.resolutionStatus))}>
             {sla.resolutionLabel}
@@ -206,8 +208,8 @@ export function TicketTable({ tickets, total, page, pages }: Props) {
     {
       id: "updated_at",
       header: () => <SortHeader label="Updated" field="updated_at" />,
-      accessorKey: "updated_at",
-      cell: ({ getValue }) => <span className="text-xs text-muted-foreground">{timeAgo(getValue() as string)}</span>,
+      accessorKey: "updatedAt",
+      cell: ({ getValue }) => <span className="text-xs text-muted-foreground">{timeAgo(getValue() as Date)}</span>,
     },
   ], []);
 

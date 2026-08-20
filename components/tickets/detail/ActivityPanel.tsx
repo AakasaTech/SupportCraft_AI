@@ -1,12 +1,12 @@
 import { Clock } from "lucide-react";
 import { getActivityLog } from "@/features/tickets/lib/queries";
-import type { AuditLog } from "@/types/database";
+import type { AuditLog } from "@/lib/generated/prisma/client";
 
 interface Props {
   ticketId: string;
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string | Date): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 2)  return "Just now";
@@ -55,7 +55,7 @@ export async function ActivityPanel({ ticketId }: Props) {
               </p>
               <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                 <Clock size={9} />
-                {timeAgo(log.created_at)}
+                {timeAgo(log.createdAt)}
               </span>
             </li>
           ))}

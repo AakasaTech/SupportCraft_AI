@@ -1,16 +1,17 @@
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/is-admin-email";
 
 export { isAdminEmail };
 
 /** Throws a redirect-safe error if the caller is not an admin. */
 export async function verifyAdmin(): Promise<{ email: string; userId: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth();
+  const email = session?.user?.email;
+  const userId = session?.user?.id;
 
-  if (!user?.email || !isAdminEmail(user.email)) {
+  if (!email || !userId || !isAdminEmail(email)) {
     throw new Error("Unauthorized");
   }
 
-  return { email: user.email, userId: user.id };
+  return { email, userId };
 }

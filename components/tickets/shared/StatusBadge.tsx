@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { TicketStatus } from "@/types/database";
+import type { TicketStatus } from "@/lib/generated/prisma/client";
 
 const CONFIG: Record<TicketStatus, { label: string; cls: string; dot: string }> = {
   new:         { label: "New",                cls: "bg-blue-50 text-blue-700 border-blue-200",        dot: "bg-blue-500" },

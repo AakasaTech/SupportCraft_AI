@@ -11,11 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import type { Customer, Profile, Department, TicketTemplate } from "@/types/database";
+import type { Customer, Profile, Department, TicketTemplate } from "@/lib/generated/prisma/client";
 
 interface Props {
   customers:   Pick<Customer, "id" | "name" | "email" | "company">[];
-  agents:      Pick<Profile, "id" | "full_name">[];
+  agents:      Pick<Profile, "id" | "fullName">[];
   departments: Pick<Department, "id" | "name">[];
   templates:   Pick<TicketTemplate, "id" | "name" | "subject" | "body" | "priority" | "category" | "department" | "tags">[];
 }
@@ -220,7 +220,7 @@ export function NewTicketForm({ customers, agents, departments, templates }: Pro
             <SelectContent>
               <SelectItem value="">Unassigned</SelectItem>
               {agents.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>
+                <SelectItem key={a.id} value={a.id}>{a.fullName}</SelectItem>
               ))}
             </SelectContent>
           </Select>

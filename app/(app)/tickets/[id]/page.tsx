@@ -12,7 +12,6 @@ import { CustomerInfoPanel } from "@/components/tickets/detail/CustomerInfoPanel
 import { ActivityPanel } from "@/components/tickets/detail/ActivityPanel";
 import { AIAssistantPanel } from "@/components/tickets/ai/AIAssistantPanel";
 import { AIAnalyzePanel }   from "@/components/ai/AIAnalyzePanel";
-import type { Customer, Profile, TicketMessageWithAuthor } from "@/types/database";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -20,30 +19,22 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  try {
-    const { ticket } = await getTicketById(id);
-    return { title: `${ticket.ticket_number ?? "Ticket"} — ${ticket.title}` };
-  } catch {
-    return { title: "Ticket" };
-  }
+  const { ticket } = await getTicketById(id);
+  if (!ticket) return { title: "Ticket" };
+  return { title: `${ticket.ticketNumber ?? "Ticket"} — ${ticket.title}` };
 }
 
 export default async function TicketDetailPage({ params }: Props) {
   const { id } = await params;
   const { profile } = await requireAuth();
 
-  let data;
-  try {
-    data = await getTicketById(id);
-  } catch {
-    notFound();
-  }
+  const { ticket, messages } = await getTicketById(id);
+  if (!ticket) notFound();
 
-  const { ticket, messages, attachments: _a } = data;
-  const agents = await getAgents(profile.org_id);
+  const agents = await getAgents(profile.organizationId);
   const canDelete = hasPermission(profile.role, "tickets:delete");
 
-  const customer = ticket.customer as Customer | null;
+  const customer = ticket.customer;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
@@ -58,7 +49,7 @@ export default async function TicketDetailPage({ params }: Props) {
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           <ConversationThread
             ticketId={ticket.id}
-            initialMessages={messages as TicketMessageWithAuthor[]}
+            initialMessages={messages}
           />
 
           <TicketReplySection
@@ -71,7 +62,7 @@ export default async function TicketDetailPage({ params }: Props) {
 
           <TicketInfoPanel
             ticket={ticket}
-            agents={agents as Pick<Profile, "id" | "full_name" | "avatar_url">[]}
+            agents={agents}
           />
 
           {customer && (
@@ -84,7 +75,7 @@ export default async function TicketDetailPage({ params }: Props) {
             ticketId={ticket.id}
             ticketTitle={ticket.title}
             ticketContent={ticket.description}
-            orgId={profile.org_id}
+            orgId={profile.organizationId}
           />
 
           <AIAnalyzePanel ticketId={ticket.id} />

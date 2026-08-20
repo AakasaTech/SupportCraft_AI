@@ -1,8 +1,8 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { canUseAI, canUseFeature, featureRequiresPlan } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 import type { PlanFeature } from "@/lib/plans";
-import type { AIUsageRecord, AIProvider } from "./types";
+import type { AIUsageRecord } from "./types";
 
 // Cost per 1M tokens in USD
 const COST_TABLE: Record<string, { input: number; output: number }> = {
@@ -51,36 +51,33 @@ export async function checkAILimits(
   orgId:    string,
   plan:     string | OrgPlan
 ): Promise<{ allowed: boolean; usage: number }> {
-  const admin = createAdminClient();
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-  const { count } = await admin
-    .from("ai_usage_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .gte("created_at", startOfMonth);
+  const usage = await prisma.aiUsageLog.count({
+    where: { organizationId: orgId, createdAt: { gte: startOfMonth } },
+  });
 
-  const usage   = count ?? 0;
   const allowed = canUseAI(plan as OrgPlan, usage);
   return { allowed, usage };
 }
 
 export async function trackUsage(record: AIUsageRecord): Promise<void> {
-  const admin = createAdminClient();
   try {
-    await admin.from("ai_usage_logs").insert({
-      org_id:              record.orgId,
-      feature:             record.feature,
-      provider:            record.provider,
-      model:               record.model,
-      tokens_used:         record.tokensUsed,
-      prompt_tokens:       record.promptTokens,
-      completion_tokens:   record.completionTokens,
-      latency_ms:          record.latencyMs,
-      estimated_cost_usd:  record.estimatedCostUsd,
-      user_id:             record.userId    ?? null,
-      ticket_id:           record.ticketId  ?? null,
-      cached:              record.cached,
+    await prisma.aiUsageLog.create({
+      data: {
+        organizationId:    record.orgId,
+        feature:           record.feature,
+        provider:          record.provider,
+        model:             record.model,
+        tokensUsed:        record.tokensUsed,
+        promptTokens:      record.promptTokens,
+        completionTokens:  record.completionTokens,
+        latencyMs:         record.latencyMs,
+        estimatedCostUsd:  record.estimatedCostUsd,
+        userId:            record.userId   ?? null,
+        ticketId:          record.ticketId ?? null,
+        cached:            record.cached,
+      },
     });
   } catch {
     // Usage tracking failure is non-fatal
@@ -88,15 +85,14 @@ export async function trackUsage(record: AIUsageRecord): Promise<void> {
 }
 
 export async function getMonthlyStats(orgId: string) {
-  const admin = createAdminClient();
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-  const { data } = await admin
-    .from("ai_usage_logs")
-    .select("feature, tokens_used, estimated_cost_usd, cached, latency_ms, provider, model, created_at")
-    .eq("org_id", orgId)
-    .gte("created_at", startOfMonth)
-    .order("created_at", { ascending: false });
-
-  return data ?? [];
+  return prisma.aiUsageLog.findMany({
+    where: { organizationId: orgId, createdAt: { gte: startOfMonth } },
+    select: {
+      feature: true, tokensUsed: true, estimatedCostUsd: true, cached: true,
+      latencyMs: true, provider: true, model: true, createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
 }

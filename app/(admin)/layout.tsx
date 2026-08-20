@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/is-admin-email";
 import { LayoutDashboard, Building2, Users, LogOut, ShieldCheck } from "lucide-react";
 
@@ -12,8 +12,8 @@ const NAV = [
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth();
+  const user = session?.user;
 
   if (!user?.email || !isAdminEmail(user.email)) redirect("/unauthorized");
 

@@ -18,16 +18,15 @@ export default async function InvitationPage({ params }: Props) {
     redirect("/invitation-invalid");
   }
 
-  if (invitation.accepted_at) {
+  if (invitation.acceptedAt) {
     redirect("/login?message=invitation_already_used");
   }
 
-  if (new Date(invitation.expires_at) < new Date()) {
+  if (invitation.expiresAt < new Date()) {
     redirect("/invitation-expired");
   }
 
-  const org = (invitation as unknown as { organizations: { name: string; slug: string } | null })
-    .organizations;
+  const org = invitation.organization;
 
   return (
     <div className="space-y-6">
@@ -49,7 +48,7 @@ export default async function InvitationPage({ params }: Props) {
 
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Clock size={12} aria-hidden />
-        Expires {new Date(invitation.expires_at).toLocaleDateString()}
+        Expires {invitation.expiresAt.toLocaleDateString()}
       </div>
 
       <AcceptInvitationForm token={token} email={invitation.email} />

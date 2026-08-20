@@ -11,7 +11,7 @@ import { PriorityBadge } from "@/components/tickets/shared/PriorityBadge";
 import { computeSLA, getSLABgColor } from "@/lib/sla";
 import { updateTicketField, deleteTicket } from "@/features/tickets/actions";
 import { cn } from "@/lib/utils";
-import type { Ticket, TicketStatus, TicketPriority } from "@/types/database";
+import type { Ticket, TicketStatus, TicketPriority } from "@/lib/generated/prisma/client";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -43,7 +43,7 @@ export function TicketHeader({ ticket, canDelete }: Props) {
   const [priority, setPriority] = useState<TicketPriority>(ticket.priority);
   const [, startTransition] = useTransition();
 
-  const sla = computeSLA(ticket.created_at, ticket.priority, ticket.first_response_at, ticket.resolved_at);
+  const sla = computeSLA(ticket.createdAt, ticket.priority, ticket.firstResponseAt, ticket.resolvedAt);
 
   const handleStatusChange = (newStatus: TicketStatus) => {
     setStatus(newStatus);
@@ -70,9 +70,9 @@ export function TicketHeader({ ticket, canDelete }: Props) {
         <Link href="/tickets" className="p-1 rounded hover:bg-muted transition-colors">
           <ChevronLeft size={16} className="text-muted-foreground" />
         </Link>
-        {ticket.ticket_number && (
+        {ticket.ticketNumber && (
           <span className="text-xs font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded">
-            {ticket.ticket_number}
+            {ticket.ticketNumber}
           </span>
         )}
         <div className="flex-1" />

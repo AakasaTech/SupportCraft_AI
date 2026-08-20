@@ -2,15 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/helpers";
 import { logAuditEvent } from "@/lib/audit";
 import { sendNewTicketEmail, sendTicketReplyEmail } from "@/lib/resend";
 import { getOrgEmail } from "@/lib/email/platform-provider";
 import { getPlanLimits, resolveEffectivePlan } from "@/lib/plans";
 import { dispatchWebhookEvent } from "@/lib/webhooks";
-import type { OrgPlan } from "@/types/database";
 import {
   createTicketSchema,
   updateTicketSchema,
@@ -19,41 +18,48 @@ import {
   savedViewSchema,
 } from "../schemas";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Webhook helper ───────────────────────────────────────────────────────────
 
-async function getOrgId(): Promise<{ orgId: string; userId: string }> {
-  const { profile } = await requireAuth();
-  return { orgId: profile.org_id, userId: profile.id };
+async function notifyTicketStatusChanged(ticketId: string) {
+  const t = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: { organizationId: true, ticketNumber: true, title: true, status: true, priority: true },
+  });
+  if (!t) return;
+  dispatchWebhookEvent(t.organizationId, "ticket.status_changed", {
+    id: ticketId,
+    number: t.ticketNumber ?? "",
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    url: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/tickets/${ticketId}`,
+  }).catch(() => {});
 }
 
 // ─── Create ticket ────────────────────────────────────────────────────────────
 
 export async function createTicket(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("org_id")
-    .eq("id", user.id)
-    .single();
-  if (!profile) return { error: "Profile not found" };
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
   // Enforce monthly ticket limit for the Free plan
-  const { data: org } = await supabase
-    .from("organizations").select("plan, freepass_plan, freepass_until").eq("id", profile.org_id).single();
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { plan: true, freepassPlan: true, freepassUntil: true },
+  });
   if (org) {
-    const effectivePlan = resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+    const effectivePlan = resolveEffectivePlan({
+      plan: org.plan,
+      freepass_plan: org.freepassPlan,
+      freepass_until: org.freepassUntil?.toISOString() ?? null,
+    });
     const limits = getPlanLimits(effectivePlan);
     if (limits.tickets !== Infinity) {
-      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-      const { count } = await supabase
-        .from("tickets")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", profile.org_id)
-        .gte("created_at", startOfMonth);
-      if ((count ?? 0) >= limits.tickets) {
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const count = await prisma.ticket.count({
+        where: { organizationId: orgId, createdAt: { gte: startOfMonth } },
+      });
+      if (count >= limits.tickets) {
         return {
           error: `Your Free plan allows ${limits.tickets} tickets per month. Upgrade to create more.`,
         };
@@ -79,56 +85,53 @@ export async function createTicket(formData: FormData) {
 
   const { customerId, assigneeId, dueDate, templateId: _t, ...rest } = parsed.data;
 
-  const { data: ticket, error } = await supabase
-    .from("tickets")
-    .insert({
-      ...rest,
-      org_id:      profile.org_id,
-      customer_id: customerId ?? null,
-      assignee_id: assigneeId ?? null,
-      due_date:    dueDate ?? null,
-    })
-    .select("id, ticket_number")
-    .single();
-
-  if (error) return { error: error.message };
-
-  // Insert description as the first message so it appears in the conversation thread
+  let ticket: { id: string; ticketNumber: string | null };
   try {
-    const firstMsgPayload: Record<string, unknown> = {
-      ticket_id:   ticket.id,
-      author_id:   null,
-      content:     parsed.data.description,
-      is_ai:       false,
-      is_customer: true,
-    };
-    await supabase.from("ticket_messages").insert({ ...firstMsgPayload, is_internal: false }).throwOnError();
-  } catch {
-    // Fallback if is_internal column not yet added (migration 003 pending)
-    await supabase.from("ticket_messages").insert({
-      ticket_id:   ticket.id,
-      author_id:   null,
-      content:     parsed.data.description,
-      is_ai:       false,
-      is_customer: true,
+    ticket = await prisma.$transaction(async (tx) => {
+      const created = await tx.ticket.create({
+        data: {
+          ...rest,
+          organizationId: orgId,
+          customerId: customerId ?? null,
+          assigneeId: assigneeId ?? null,
+          dueDate: dueDate ? new Date(dueDate) : null,
+        },
+        select: { id: true, ticketNumber: true },
+      });
+
+      // Insert description as the first message so it appears in the conversation thread
+      await tx.ticketMessage.create({
+        data: {
+          ticketId: created.id,
+          authorId: null,
+          content: parsed.data.description,
+          isAi: false,
+          isCustomer: true,
+          isInternal: false,
+        },
+      });
+
+      return created;
     });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to create ticket" };
   }
 
   // Email assigned agent
   try {
     if (assigneeId && customerId) {
-      const [{ data: assignee }, { data: customer }] = await Promise.all([
-        supabase.from("profiles").select("email, full_name").eq("id", assigneeId).single(),
-        supabase.from("customers").select("name").eq("id", customerId).single(),
+      const [assignee, customer] = await Promise.all([
+        prisma.profile.findUnique({ where: { id: assigneeId }, select: { email: true, fullName: true } }),
+        prisma.customer.findUnique({ where: { id: customerId }, select: { name: true } }),
       ]);
       if (assignee?.email) {
         await sendNewTicketEmail({
-          to:           assignee.email,
-          agentName:    assignee.full_name ?? "Agent",
-          ticketTitle:  parsed.data.title,
-          ticketId:     ticket.id,
+          to: assignee.email,
+          agentName: assignee.fullName ?? "Agent",
+          ticketTitle: parsed.data.title,
+          ticketId: ticket.id,
           customerName: customer?.name ?? "Customer",
-          ticketNumber: ticket.ticket_number ?? undefined,
+          ticketNumber: ticket.ticketNumber ?? undefined,
         });
       }
     }
@@ -136,27 +139,25 @@ export async function createTicket(formData: FormData) {
     // Email failure is non-fatal
   }
 
-  await logAuditEvent({ event: "ticket.created", orgId: profile.org_id, userId: user.id, metadata: { ticketId: ticket.id } });
+  await logAuditEvent({ event: "ticket.created", orgId, userId: user.id, metadata: { ticketId: ticket.id } });
 
-  dispatchWebhookEvent(profile.org_id, 'ticket.created', {
-    id:       ticket.id,
-    number:   ticket.ticket_number ?? '',
-    title:    parsed.data.title,
-    status:   'new',
+  dispatchWebhookEvent(orgId, "ticket.created", {
+    id: ticket.id,
+    number: ticket.ticketNumber ?? "",
+    title: parsed.data.title,
+    status: "new",
     priority: parsed.data.priority,
-    url:      `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticket.id}`,
-  }).catch(() => {})
+    url: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/tickets/${ticket.id}`,
+  }).catch(() => {});
 
   revalidatePath("/tickets");
-  return { ticketId: ticket.id, ticketNumber: ticket.ticket_number };
+  return { ticketId: ticket.id, ticketNumber: ticket.ticketNumber };
 }
 
 // ─── Update ticket ────────────────────────────────────────────────────────────
 
 export async function updateTicket(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const tagsRaw = formData.get("tags") as string;
   const parsed = updateTicketSchema.safeParse({
@@ -175,47 +176,36 @@ export async function updateTicket(formData: FormData) {
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   const { ticketId, assigneeId, dueDate, ...updates } = parsed.data;
-  const now = new Date().toISOString();
-  const cleanUpdates: Record<string, unknown> = { updated_at: now };
+  const now = new Date();
+  const data: Record<string, unknown> = {};
 
-  if (updates.title)       cleanUpdates.title       = updates.title;
-  if (updates.description) cleanUpdates.description = updates.description;
-  if (updates.status)      cleanUpdates.status      = updates.status;
-  if (updates.priority)    cleanUpdates.priority    = updates.priority;
-  if (updates.category !== undefined) cleanUpdates.category   = updates.category;
-  if (updates.department !== undefined) cleanUpdates.department = updates.department;
-  if (updates.tags)        cleanUpdates.tags        = updates.tags;
-  if (assigneeId !== undefined) cleanUpdates.assignee_id = assigneeId;
-  if (dueDate !== undefined)    cleanUpdates.due_date    = dueDate;
+  if (updates.title) data.title = updates.title;
+  if (updates.description) data.description = updates.description;
+  if (updates.status) data.status = updates.status;
+  if (updates.priority) data.priority = updates.priority;
+  if (updates.category !== undefined) data.category = updates.category;
+  if (updates.department !== undefined) data.department = updates.department;
+  if (updates.tags) data.tags = updates.tags;
+  if (assigneeId !== undefined) data.assigneeId = assigneeId;
+  if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
 
-  // Track resolution/closure timestamps
-  if (updates.status === "resolved") cleanUpdates.resolved_at = now;
-  if (updates.status === "closed")   cleanUpdates.closed_at   = now;
+  if (updates.status === "resolved") data.resolvedAt = now;
+  if (updates.status === "closed") data.closedAt = now;
 
-  const { error } = await supabase
-    .from("tickets")
-    .update(cleanUpdates)
-    .eq("id", ticketId);
-
-  if (error) return { error: error.message };
+  try {
+    await prisma.ticket.update({ where: { id: ticketId }, data });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update ticket" };
+  }
 
   if (updates.status) {
-    await logAuditEvent({ event: "ticket.status_changed", orgId: "", userId: user.id,
-      metadata: { ticketId, newStatus: updates.status } });
-
-    // Fetch org_id + minimal ticket data for the webhook payload (non-blocking)
-    const admin = createAdminClient()
-    admin.from('tickets').select('org_id, ticket_number, title, status, priority').eq('id', ticketId).single()
-      .then(({ data: t }) => {
-        if (t) dispatchWebhookEvent(t.org_id, 'ticket.status_changed', {
-          id:       ticketId,
-          number:   t.ticket_number ?? '',
-          title:    t.title,
-          status:   t.status,
-          priority: t.priority,
-          url:      `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticketId}`,
-        }).catch(() => {})
-      })
+    await logAuditEvent({
+      event: "ticket.status_changed",
+      orgId: user.profile.organizationId,
+      userId: user.id,
+      metadata: { ticketId, newStatus: updates.status },
+    });
+    notifyTicketStatusChanged(ticketId);
   }
 
   revalidatePath(`/tickets/${ticketId}`);
@@ -225,43 +215,34 @@ export async function updateTicket(formData: FormData) {
 
 // ─── Update ticket field (inline editing) ────────────────────────────────────
 
-export async function updateTicketField(
-  ticketId: string,
-  field: string,
-  value: unknown
-) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+const ALLOWED_FIELDS = ["status", "priority", "assigneeId", "category", "department", "tags", "dueDate", "title"] as const;
+const FIELD_MAP: Record<string, string> = {
+  assignee_id: "assigneeId",
+  due_date: "dueDate",
+};
 
-  const now = new Date().toISOString();
-  const update: Record<string, unknown> = { updated_at: now };
+export async function updateTicketField(ticketId: string, field: string, value: unknown) {
+  await requireAuth();
 
-  const allowedFields = ["status", "priority", "assignee_id", "category", "department", "tags", "due_date", "title"];
-  if (!allowedFields.includes(field)) return { error: "Invalid field" };
+  const mappedField = FIELD_MAP[field] ?? field;
+  if (!ALLOWED_FIELDS.includes(mappedField as (typeof ALLOWED_FIELDS)[number])) {
+    return { error: "Invalid field" };
+  }
 
-  update[field] = value;
+  const now = new Date();
+  const data: Record<string, unknown> = { [mappedField]: value };
 
-  // Track timestamps
-  if (field === "status" && value === "resolved") update.resolved_at = now;
-  if (field === "status" && value === "closed")   update.closed_at   = now;
+  if (mappedField === "status" && value === "resolved") data.resolvedAt = now;
+  if (mappedField === "status" && value === "closed") data.closedAt = now;
 
-  const { error } = await supabase.from("tickets").update(update).eq("id", ticketId);
-  if (error) return { error: error.message };
+  try {
+    await prisma.ticket.update({ where: { id: ticketId }, data });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update ticket" };
+  }
 
-  if (field === "status") {
-    const admin = createAdminClient()
-    admin.from('tickets').select('org_id, ticket_number, title, status, priority').eq('id', ticketId).single()
-      .then(({ data: t }) => {
-        if (t) dispatchWebhookEvent(t.org_id, 'ticket.status_changed', {
-          id:       ticketId,
-          number:   t.ticket_number ?? '',
-          title:    t.title,
-          status:   t.status,
-          priority: t.priority,
-          url:      `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/tickets/${ticketId}`,
-        }).catch(() => {})
-      })
+  if (mappedField === "status") {
+    notifyTicketStatusChanged(ticketId);
   }
 
   revalidatePath(`/tickets/${ticketId}`);
@@ -272,9 +253,7 @@ export async function updateTicketField(
 // ─── Reply to ticket ──────────────────────────────────────────────────────────
 
 export async function replyToTicket(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const parsed = replyTicketSchema.safeParse({
     ticketId:   formData.get("ticketId"),
@@ -285,117 +264,114 @@ export async function replyToTicket(formData: FormData) {
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   const { ticketId, content, isInternal } = parsed.data;
-  const now = new Date().toISOString();
+  const now = new Date();
 
-  const { data: msg, error: msgError } = await supabase
-    .from("ticket_messages")
-    .insert({
-      ticket_id:   ticketId,
-      author_id:   user.id,
+  const msg = await prisma.ticketMessage.create({
+    data: {
+      ticketId,
+      authorId: user.profile.id,
       content,
-      is_ai:       false,
-      is_customer: false,
-      is_internal: isInternal,
-    })
-    .select("id")
-    .single();
+      isAi: false,
+      isCustomer: false,
+      isInternal,
+    },
+    select: { id: true },
+  });
 
-  if (msgError) return { error: msgError.message };
+  // Update ticket: mark firstResponseAt if this is the first agent reply
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: { firstResponseAt: true, status: true },
+  });
 
-  // Update ticket: mark first_response_at if this is the first agent reply
-  const { data: ticket } = await supabase
-    .from("tickets")
-    .select("first_response_at, status")
-    .eq("id", ticketId)
-    .single();
-
-  const ticketUpdate: Record<string, unknown> = { updated_at: now };
-  if (!ticket?.first_response_at && !isInternal) ticketUpdate.first_response_at = now;
+  const ticketUpdate: Record<string, unknown> = {};
+  if (!ticket?.firstResponseAt && !isInternal) ticketUpdate.firstResponseAt = now;
   if (!isInternal && ticket?.status === "pending") ticketUpdate.status = "open";
 
-  await supabase.from("tickets").update(ticketUpdate).eq("id", ticketId);
+  if (Object.keys(ticketUpdate).length > 0) {
+    await prisma.ticket.update({ where: { id: ticketId }, data: ticketUpdate });
+  }
 
   // Email the customer when an agent sends a public reply
   if (!isInternal) {
     try {
-      const admin = createAdminClient();
-
-      const [
-        { data: ticketData },
-        { data: agentProfile },
-        { data: lastInbound },
-      ] = await Promise.all([
-        supabase
-          .from("tickets")
-          .select("title, ticket_number, org_id, customer:customers!customer_id(name, email)")
-          .eq("id", ticketId)
-          .single(),
-        supabase.from("profiles").select("full_name").eq("id", user.id).single(),
-        admin
-          .from("email_messages")
-          .select("message_id, references")
-          .eq("ticket_id", ticketId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single(),
+      const [ticketData, agentProfile, lastInbound] = await Promise.all([
+        prisma.ticket.findUnique({
+          where: { id: ticketId },
+          select: {
+            title: true, ticketNumber: true, organizationId: true,
+            customer: { select: { name: true, email: true } },
+          },
+        }),
+        prisma.profile.findUnique({ where: { id: user.profile.id }, select: { fullName: true } }),
+        prisma.emailMessage.findFirst({
+          where: { ticketId },
+          select: { messageId: true, messageReferences: true },
+          orderBy: { createdAt: "desc" },
+        }),
       ]);
 
-      const customer = ticketData?.customer as { name?: string; email?: string } | null;
+      const customer = ticketData?.customer;
       if (!customer?.email || !ticketData) return { success: true, messageId: msg.id };
 
-      const { data: emailSettings } = await admin
-        .from("email_settings")
-        .select("tenant_slug, display_name")
-        .eq("org_id", ticketData.org_id)
-        .single();
+      const emailSettings = await prisma.emailSettings.findUnique({
+        where: { organizationId: ticketData.organizationId },
+        select: { tenantSlug: true, displayName: true },
+      });
 
       const outboundMessageId = `reply-${ticketId}-${Date.now()}@supportcraft.aakasa.dev`;
-      const prevRefs: string[] = Array.isArray(lastInbound?.references) ? lastInbound.references : [];
-      const inReplyToId = lastInbound?.message_id ?? undefined;
-      const references  = inReplyToId ? [...prevRefs, inReplyToId] : prevRefs;
+      const prevRefs: string[] = lastInbound?.messageReferences ?? [];
+      const inReplyToId = lastInbound?.messageId ?? undefined;
+      const references = inReplyToId ? [...prevRefs, inReplyToId] : prevRefs;
 
-      const fromAddress = emailSettings?.tenant_slug ? getOrgEmail(emailSettings.tenant_slug) : undefined;
-      const displayName = emailSettings?.display_name ?? emailSettings?.tenant_slug ?? undefined;
-      const replySubject = ticketData.ticket_number
-        ? `[Ticket #${ticketData.ticket_number}] ${ticketData.title}`
+      const fromAddress = emailSettings?.tenantSlug ? getOrgEmail(emailSettings.tenantSlug) : undefined;
+      const displayName = emailSettings?.displayName ?? emailSettings?.tenantSlug ?? undefined;
+      const replySubject = ticketData.ticketNumber
+        ? `[Ticket #${ticketData.ticketNumber}] ${ticketData.title}`
         : ticketData.title;
 
       await sendTicketReplyEmail({
-        to:                customer.email,
-        customerName:      customer.name ?? "Customer",
-        agentName:         agentProfile?.full_name ?? "Support Team",
-        ticketTitle:       ticketData.title ?? "",
-        replyContent:      content,
+        to: customer.email,
+        customerName: customer.name ?? "Customer",
+        agentName: agentProfile?.fullName ?? "Support Team",
+        ticketTitle: ticketData.title ?? "",
+        replyContent: content,
         ticketId,
-        ticketNumber:      ticketData.ticket_number ?? undefined,
+        ticketNumber: ticketData.ticketNumber ?? undefined,
         fromAddress,
         displayName,
         outboundMessageId,
-        inReplyTo:         inReplyToId,
-        references:        references.length ? references : undefined,
+        inReplyTo: inReplyToId,
+        references: references.length ? references : undefined,
       });
 
       // Record outbound so customer replies thread back in
-      await admin.from("email_messages").insert({
-        org_id:      ticketData.org_id,
-        ticket_id:   ticketId,
-        direction:   "outbound",
-        message_id:  outboundMessageId,
-        in_reply_to: inReplyToId ?? null,
-        references,
-        from_address: fromAddress ?? "noreply@supportcraft.aakasa.dev",
-        to_address:  customer.email,
-        subject:     replySubject,
-        body_plain:  content,
-        status:      "sent",
+      await prisma.emailMessage.create({
+        data: {
+          organizationId: ticketData.organizationId,
+          ticketId,
+          direction: "outbound",
+          messageId: outboundMessageId,
+          inReplyTo: inReplyToId ?? null,
+          messageReferences: references,
+          fromAddress: fromAddress ?? "noreply@supportcraft.aakasa.dev",
+          toAddress: customer.email,
+          subject: replySubject,
+          bodyPlain: content,
+          status: "sent",
+        },
       });
     } catch (e) {
       console.error("Reply email failed:", e);
     }
   }
 
-  await logAuditEvent({ event: "ticket.reply_sent", orgId: "", userId: user.id,
-    metadata: { ticketId, messageId: msg.id, isInternal } });
+  await logAuditEvent({
+    event: "ticket.reply_sent",
+    orgId: user.profile.organizationId,
+    userId: user.id,
+    metadata: { ticketId, messageId: msg.id, isInternal },
+  });
 
   revalidatePath(`/tickets/${ticketId}`);
   return { success: true, messageId: msg.id };
@@ -404,16 +380,8 @@ export async function replyToTicket(formData: FormData) {
 // ─── Bulk actions ─────────────────────────────────────────────────────────────
 
 export async function bulkUpdateTickets(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("org_id, role")
-    .eq("id", user.id)
-    .single();
-  if (!profile) return { error: "Profile not found" };
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
   const idsRaw = formData.get("ticketIds") as string;
   const parsed = bulkActionSchema.safeParse({
@@ -426,34 +394,36 @@ export async function bulkUpdateTickets(formData: FormData) {
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   const { ticketIds, action, assigneeId, priority } = parsed.data;
-  const now = new Date().toISOString();
+  const now = new Date();
 
-  let update: Record<string, unknown> = { updated_at: now };
+  const data: Record<string, unknown> = {};
 
   switch (action) {
-    case "resolve":    update.status = "resolved"; update.resolved_at = now; break;
-    case "close":      update.status = "closed";   update.closed_at   = now; break;
+    case "resolve":
+      data.status = "resolved";
+      data.resolvedAt = now;
+      break;
+    case "close":
+      data.status = "closed";
+      data.closedAt = now;
+      break;
     case "setPriority":
       if (!priority) return { error: "Priority required" };
-      update.priority = priority;
+      data.priority = priority;
       break;
     case "assign":
       if (!assigneeId) return { error: "Assignee required" };
-      update.assignee_id = assigneeId;
+      data.assigneeId = assigneeId;
       break;
-    case "delete":
-      if (!["owner", "admin"].includes(profile.role)) return { error: "Insufficient permissions" };
-      const { error: delError } = await supabase.from("tickets").delete()
-        .eq("org_id", profile.org_id).in("id", ticketIds);
-      if (delError) return { error: delError.message };
+    case "delete": {
+      if (!["owner", "admin"].includes(user.profile.role)) return { error: "Insufficient permissions" };
+      await prisma.ticket.deleteMany({ where: { organizationId: orgId, id: { in: ticketIds } } });
       revalidatePath("/tickets");
       return { success: true, count: ticketIds.length };
+    }
   }
 
-  const { error } = await supabase.from("tickets").update(update)
-    .eq("org_id", profile.org_id).in("id", ticketIds);
-
-  if (error) return { error: error.message };
+  await prisma.ticket.updateMany({ where: { organizationId: orgId, id: { in: ticketIds } }, data });
 
   revalidatePath("/tickets");
   return { success: true, count: ticketIds.length };
@@ -462,15 +432,12 @@ export async function bulkUpdateTickets(formData: FormData) {
 // ─── Delete ticket ────────────────────────────────────────────────────────────
 
 export async function deleteTicket(ticketId: string) {
-  const supabase = await createClient();
-  const { orgId, userId } = await getOrgId();
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
-  const { error } = await supabase.from("tickets").delete()
-    .eq("id", ticketId).eq("org_id", orgId);
+  await prisma.ticket.deleteMany({ where: { id: ticketId, organizationId: orgId } });
 
-  if (error) return { error: error.message };
-
-  await logAuditEvent({ event: "ticket.deleted", orgId, userId, metadata: { ticketId } });
+  await logAuditEvent({ event: "ticket.deleted", orgId, userId: user.id, metadata: { ticketId } });
   revalidatePath("/tickets");
   redirect("/tickets");
 }
@@ -478,8 +445,7 @@ export async function deleteTicket(ticketId: string) {
 // ─── Saved views ──────────────────────────────────────────────────────────────
 
 export async function createSavedView(formData: FormData) {
-  const supabase = await createClient();
-  const { orgId, userId } = await getOrgId();
+  const user = await requireAuth();
 
   const filtersRaw = formData.get("filters") as string;
   const parsed = savedViewSchema.safeParse({
@@ -490,23 +456,23 @@ export async function createSavedView(formData: FormData) {
 
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const { error } = await supabase.from("saved_views").insert({
-    org_id:    orgId,
-    user_id:   userId,
-    name:      parsed.data.name,
-    filters:   parsed.data.filters,
-    is_shared: parsed.data.isShared,
+  await prisma.savedView.create({
+    data: {
+      organizationId: user.profile.organizationId,
+      userId: user.profile.id,
+      name: parsed.data.name,
+      filters: parsed.data.filters as Prisma.InputJsonValue,
+      isShared: parsed.data.isShared,
+    },
   });
-
-  if (error) return { error: error.message };
 
   revalidatePath("/tickets");
   return { success: true };
 }
 
 export async function deleteSavedView(viewId: string) {
-  const supabase = await createClient();
-  await supabase.from("saved_views").delete().eq("id", viewId);
+  await requireAuth();
+  await prisma.savedView.delete({ where: { id: viewId } });
   revalidatePath("/tickets");
   return { success: true };
 }

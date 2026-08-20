@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-
-const BUCKET = "ticket-attachments";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { uploadFile } from "@/lib/storage";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
   let formData: FormData;
   try {
@@ -30,27 +24,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "File exceeds 25 MB limit" }, { status: 413 });
   }
 
-  const ext      = file.name.split(".").pop() ?? "bin";
-  const unique   = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const filePath = `${profile.org_id}/${ticketId}/${unique}.${ext}`;
+  const ext    = file.name.split(".").pop() ?? "bin";
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const key    = `tickets/${user.profile.organizationId}/${ticketId}/${unique}.${ext}`;
 
-  const admin = createAdminClient();
-  const arrayBuffer = await file.arrayBuffer();
-
-  const { error: uploadError } = await admin.storage
-    .from(BUCKET)
-    .upload(filePath, arrayBuffer, {
-      contentType:  file.type || "application/octet-stream",
-      cacheControl: "3600",
-      upsert:       false,
-    });
-
-  if (uploadError) {
-    console.error("Storage upload error:", uploadError);
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const { url } = await uploadFile(key, new Uint8Array(arrayBuffer), file.type || "application/octet-stream");
+    return NextResponse.json({ fileUrl: url, filename: file.name, fileSize: file.size });
+  } catch (err) {
+    console.error("Storage upload error:", err);
+    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
-
-  const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(filePath);
-
-  return NextResponse.json({ fileUrl: publicUrl, filename: file.name, fileSize: file.size });
 }

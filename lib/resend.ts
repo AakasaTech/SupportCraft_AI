@@ -13,7 +13,7 @@ export interface InvitationEmailParams {
 }
 
 export async function sendInvitationEmail(params: InvitationEmailParams) {
-  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/invitations/accept?token=${params.token}`;
+  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invitation/${params.token}`;
   const from      = `${APP_NAME} <${getEmailFrom()}>`;
 
   const html = `

@@ -1,12 +1,12 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { NextResponse } from "next/server";
+import { auth } from "@/auth.config";
 import { isAdminEmail } from "@/lib/is-admin-email";
 
 // Agent app auth routes (unauthenticated access only)
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password", "/update-password", "/verify-email"];
 
 // Routes that anyone can access
-const PUBLIC_ROUTES = ["/", "/auth/callback", "/auth/google/callback", "/privacy", "/terms", "/faq"];
+const PUBLIC_ROUTES = ["/", "/privacy", "/terms", "/faq"];
 const PUBLIC_PREFIXES = ["/docs"];
 
 // Portal-specific public routes (unauthenticated portal visitors)
@@ -18,9 +18,9 @@ const ERROR_ROUTES = ["/unauthorized", "/invitation-expired", "/invitation-inval
 // Admin routes — requires both auth + admin email check (done in layout)
 const ADMIN_ROUTES = ["/admin"];
 
-export async function middleware(request: NextRequest) {
+export default auth((request) => {
   const { pathname } = request.nextUrl;
-  const { supabaseResponse, user } = await updateSession(request);
+  const user = request.auth?.user;
 
   const isApiRoute = pathname.startsWith("/api");
   const isPublicRoute = PUBLIC_ROUTES.some((r) => pathname === r) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
@@ -33,21 +33,21 @@ export async function middleware(request: NextRequest) {
 
   // Always pass through: API, public pages, error pages
   if (isApiRoute || isPublicRoute || isErrorRoute) {
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
   // Invitation pages are auth pages but also accessible without account (new user flow)
   if (isInvitationRoute) {
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
   // Portal routes: public login allowed; all other portal routes require auth
   if (isPortalRoute) {
-    if (isPortalPublicRoute) return supabaseResponse;
+    if (isPortalPublicRoute) return NextResponse.next();
     if (!user) {
       return NextResponse.redirect(new URL("/portal/login", request.url));
     }
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
   // Admin routes — must be authenticated + admin email
@@ -58,7 +58,7 @@ export async function middleware(request: NextRequest) {
     if (!user.email || !isAdminEmail(user.email)) {
       return NextResponse.redirect(new URL("/unauthorized", request.url));
     }
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
   // Authenticated users visiting agent auth pages → send to dashboard
@@ -71,8 +71,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return supabaseResponse;
-}
+  return NextResponse.next();
+});
 
 export const config = {
   matcher: [

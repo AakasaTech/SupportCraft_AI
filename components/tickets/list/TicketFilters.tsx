@@ -4,13 +4,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import { Filter, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TicketStatus, TicketPriority, Profile, Department } from "@/types/database";
+import type { TicketStatus, TicketPriority, Profile, Department } from "@/lib/generated/prisma/client";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 
 interface Props {
-  agents:      Pick<Profile, "id" | "full_name">[];
+  agents:      Pick<Profile, "id" | "fullName">[];
   departments: Pick<Department, "id" | "name">[];
 }
 
@@ -160,7 +160,7 @@ export function TicketFilters({ agents, departments }: Props) {
                 <option value="">Any agent</option>
                 <option value="unassigned">Unassigned</option>
                 {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.full_name}</option>
+                  <option key={a.id} value={a.id}>{a.fullName}</option>
                 ))}
               </select>
             </div>

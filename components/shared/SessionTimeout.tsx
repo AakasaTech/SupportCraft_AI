@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { signOut } from 'next-auth/react';
 
 const IDLE_MS = 30 * 60 * 1000;
 const WARN_MS =  2 * 60 * 1000;
@@ -15,12 +15,11 @@ export function SessionTimeout() {
   const warnRef  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const tickRef  = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
-  const signOut = useCallback(async () => {
+  const handleSignOut = useCallback(async () => {
     clearTimeout(idleRef.current);
     clearTimeout(warnRef.current);
     clearInterval(tickRef.current);
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut({ redirect: false });
     router.push('/login');
   }, [router]);
 
@@ -40,9 +39,9 @@ export function SessionTimeout() {
         setCountdown(remaining);
         if (remaining <= 0) clearInterval(tickRef.current);
       }, 1000);
-      warnRef.current = setTimeout(signOut, WARN_MS);
+      warnRef.current = setTimeout(handleSignOut, WARN_MS);
     }, IDLE_MS);
-  }, [signOut]);
+  }, [handleSignOut]);
 
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'] as const;
@@ -81,7 +80,7 @@ export function SessionTimeout() {
           </div>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={signOut}
+              onClick={handleSignOut}
               className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
             >
               Sign out

@@ -4,24 +4,24 @@ import { ChevronLeft } from "lucide-react";
 import { requireAuth } from "@/lib/auth/helpers";
 import { getAgents, getDepartments, getTicketTemplates } from "@/features/tickets/lib/queries";
 import { NewTicketForm } from "./NewTicketForm";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "New Ticket — SupportCraft AI" };
 
 export default async function NewTicketPage() {
   const { profile } = await requireAuth();
-  const orgId = profile.org_id;
-  const supabase = await createClient();
+  const orgId = profile.organizationId;
 
-  const [agents, departments, templates, { data: customers }] = await Promise.all([
+  const [agents, departments, templates, customers] = await Promise.all([
     getAgents(orgId),
     getDepartments(orgId),
     getTicketTemplates(orgId),
-    supabase.from("customers")
-      .select("id, name, email, company")
-      .eq("org_id", orgId)
-      .order("name")
-      .limit(200),
+    prisma.customer.findMany({
+      where: { organizationId: orgId },
+      select: { id: true, name: true, email: true, company: true },
+      orderBy: { name: "asc" },
+      take: 200,
+    }),
   ]);
 
   return (
@@ -40,7 +40,7 @@ export default async function NewTicketPage() {
       <div className="px-6 py-6">
         <div className="max-w-2xl mx-auto sc-card p-6">
           <NewTicketForm
-            customers={customers ?? []}
+            customers={customers}
             agents={agents}
             departments={departments}
             templates={templates}

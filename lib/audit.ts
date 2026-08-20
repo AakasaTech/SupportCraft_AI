@@ -1,5 +1,5 @@
-import { createAdminClient } from "@/lib/supabase/server";
-import type { Json } from "@/types/database";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 export type AuditEvent =
   // Auth
@@ -43,25 +43,29 @@ interface LogAuditEventOptions {
   orgId: string;
   userId?: string;
   event: AuditEvent;
-  metadata?: Record<string, Json>;
+  metadata?: Prisma.InputJsonValue;
   ipAddress?: string;
   userAgent?: string;
 }
 
 /**
- * Inserts an audit log entry using the admin client (bypasses RLS).
- * Never throws — audit logging should never break application flow.
+ * Inserts an audit log entry. Never throws — audit logging should never
+ * break application flow.
+ *
+ * `userId` must be a User.id (session.user.id), not a Profile.id — the two
+ * are different primary keys since the NextAuth migration.
  */
 export async function logAuditEvent(options: LogAuditEventOptions): Promise<void> {
   try {
-    const admin = createAdminClient();
-    await admin.from("audit_logs").insert({
-      org_id: options.orgId,
-      user_id: options.userId ?? null,
-      event: options.event,
-      metadata: (options.metadata ?? {}) as Json,
-      ip_address: options.ipAddress ?? null,
-      user_agent: options.userAgent ?? null,
+    await prisma.auditLog.create({
+      data: {
+        organizationId: options.orgId,
+        userId: options.userId ?? null,
+        event: options.event,
+        metadata: options.metadata ?? {},
+        ipAddress: options.ipAddress ?? null,
+        userAgent: options.userAgent ?? null,
+      },
     });
   } catch {
     // Silently swallow — audit failures must never interrupt business logic

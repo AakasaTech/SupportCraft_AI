@@ -1,7 +1,7 @@
 import type { ElementType } from "react";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, ArrowUp, Minus, ArrowDown } from "lucide-react";
-import type { TicketPriority } from "@/types/database";
+import type { TicketPriority } from "@/lib/generated/prisma/client";
 
 const CONFIG: Record<TicketPriority, { label: string; cls: string; Icon: ElementType }> = {
   urgent: { label: "Urgent", cls: "bg-destructive-subtle text-destructive border-destructive/20", Icon: AlertTriangle },

@@ -1,10 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { signInWithGoogleAction, signInWithOAuth } from "../actions";
+import { signInWithGoogleAction } from "../actions";
 
 function GoogleIcon() {
   return (
@@ -29,32 +28,8 @@ function GoogleIcon() {
   );
 }
 
-function MicrosoftIcon() {
-  return (
-    <svg viewBox="0 0 23 23" width="18" height="18" aria-hidden>
-      <path fill="#f25022" d="M1 1h10v10H1z" />
-      <path fill="#00a4ef" d="M12 1h10v10H12z" />
-      <path fill="#7fba00" d="M1 12h10v10H1z" />
-      <path fill="#ffb900" d="M12 12h10v10H12z" />
-    </svg>
-  );
-}
-
 export function OAuthButtons() {
-  const [isPendingGoogle,    startGoogle]    = useTransition();
-  const [isPendingMicrosoft, startMicrosoft] = useTransition();
-  const router = useRouter();
-
-  async function handleMicrosoft() {
-    const result = await signInWithOAuth("azure");
-    if (result?.error) {
-      router.push(`?error=${encodeURIComponent(result.error)}`);
-      return;
-    }
-    if ("url" in result && result.url) {
-      window.location.href = result.url;
-    }
-  }
+  const [isPendingGoogle, startGoogle] = useTransition();
 
   return (
     <div className="space-y-2">
@@ -62,22 +37,11 @@ export function OAuthButtons() {
         type="button"
         variant="outline"
         className="w-full gap-2"
-        disabled={isPendingGoogle || isPendingMicrosoft}
+        disabled={isPendingGoogle}
         onClick={() => startGoogle(() => signInWithGoogleAction())}
       >
         {isPendingGoogle ? <Loader2 size={18} className="animate-spin" /> : <GoogleIcon />}
         Continue with Google
-      </Button>
-
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full gap-2"
-        disabled={isPendingGoogle || isPendingMicrosoft}
-        onClick={() => startMicrosoft(() => handleMicrosoft())}
-      >
-        {isPendingMicrosoft ? <Loader2 size={18} className="animate-spin" /> : <MicrosoftIcon />}
-        Continue with Microsoft
       </Button>
     </div>
   );

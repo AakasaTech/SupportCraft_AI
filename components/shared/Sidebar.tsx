@@ -21,7 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signOut } from "@/features/auth/actions";
 import { resolveEffectivePlan, PLAN_NAMES } from "@/lib/plans";
-import type { Profile, Organization, OrgPlan } from "@/types/database";
+import type { Profile, Organization } from "@/lib/generated/prisma/client";
 
 const NAV_ITEMS = [
   { href: "/dashboard",      label: "Dashboard",      icon: LayoutDashboard },
@@ -42,7 +42,7 @@ interface SidebarProps {
 export function Sidebar({ profile, organization }: SidebarProps) {
   const pathname = usePathname();
 
-  const initials = profile.full_name
+  const initials = profile.fullName
     .split(" ")
     .map((n: string) => n[0])
     .join("")
@@ -65,7 +65,7 @@ export function Sidebar({ profile, organization }: SidebarProps) {
               {organization.name}
             </p>
             <p className="text-xs text-muted-foreground capitalize">
-              {PLAN_NAMES[resolveEffectivePlan({ plan: organization.plan as OrgPlan, freepass_plan: organization.freepass_plan ?? null, freepass_until: organization.freepass_until ?? null })]} plan
+              {PLAN_NAMES[resolveEffectivePlan({ plan: organization.plan, freepass_plan: organization.freepassPlan, freepass_until: organization.freepassUntil?.toISOString() ?? null })]} plan
             </p>
           </div>
         </div>
@@ -140,14 +140,14 @@ export function Sidebar({ profile, organization }: SidebarProps) {
           <div className="flex items-center justify-between gap-2 px-3 py-2 mt-1">
             <div className="flex items-center gap-2.5 min-w-0">
               <Avatar className="h-7 w-7 shrink-0">
-                <AvatarImage src={profile.avatar_url ?? undefined} alt={profile.full_name} />
+                <AvatarImage src={profile.avatarUrl ?? undefined} alt={profile.fullName} />
                 <AvatarFallback className="text-xs bg-primary-subtle text-primary">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden lg:block min-w-0">
                 <p className="text-xs font-medium text-foreground truncate">
-                  {profile.full_name}
+                  {profile.fullName}
                 </p>
                 <p className="text-xs text-muted-foreground capitalize">{profile.role}</p>
               </div>

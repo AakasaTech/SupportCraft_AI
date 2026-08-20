@@ -7,7 +7,7 @@ import { PriorityBadge } from "@/components/tickets/shared/PriorityBadge";
 import { computeSLA, getSLABgColor } from "@/lib/sla";
 import { updateTicketField } from "@/features/tickets/actions";
 import { cn } from "@/lib/utils";
-import type { Ticket, Profile, TicketStatus, TicketPriority } from "@/types/database";
+import type { Ticket, Profile, TicketStatus, TicketPriority } from "@/lib/generated/prisma/client";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -19,7 +19,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 interface Props {
   ticket:  Ticket;
-  agents:  Pick<Profile, "id" | "full_name" | "avatar_url">[];
+  agents:  Pick<Profile, "id" | "fullName" | "avatarUrl">[];
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -34,10 +34,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function TicketInfoPanel({ ticket, agents }: Props) {
   const [status,     setStatus]     = useState<TicketStatus>(ticket.status);
   const [priority,   setPriority]   = useState<TicketPriority>(ticket.priority);
-  const [assigneeId, setAssigneeId] = useState<string>(ticket.assignee_id ?? "__none__");
+  const [assigneeId, setAssigneeId] = useState<string>(ticket.assigneeId ?? "__none__");
   const [, startTransition]         = useTransition();
 
-  const sla = computeSLA(ticket.created_at, ticket.priority, ticket.first_response_at, ticket.resolved_at);
+  const sla = computeSLA(ticket.createdAt, ticket.priority, ticket.firstResponseAt, ticket.resolvedAt);
 
   const update = (field: string, value: unknown) =>
     startTransition(() => { void updateTicketField(ticket.id, field, value); });
@@ -91,7 +91,7 @@ export function TicketInfoPanel({ ticket, agents }: Props) {
             <SelectContent>
               <SelectItem value="__none__" className="text-xs">Unassigned</SelectItem>
               {agents.map((a) => (
-                <SelectItem key={a.id} value={a.id} className="text-xs">{a.full_name}</SelectItem>
+                <SelectItem key={a.id} value={a.id} className="text-xs">{a.fullName}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -121,18 +121,18 @@ export function TicketInfoPanel({ ticket, agents }: Props) {
         <Row label="Created">
           <span className="flex items-center gap-1 text-muted-foreground">
             <Calendar size={11} />
-            {new Date(ticket.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            {ticket.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </span>
         </Row>
 
-        {ticket.due_date && (
+        {ticket.dueDate && (
           <Row label="Due">
             <span className={cn(
               "flex items-center gap-1",
-              new Date(ticket.due_date) < new Date() ? "text-destructive" : "text-muted-foreground"
+              ticket.dueDate < new Date() ? "text-destructive" : "text-muted-foreground"
             )}>
               <Clock size={11} />
-              {new Date(ticket.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              {ticket.dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
           </Row>
         )}

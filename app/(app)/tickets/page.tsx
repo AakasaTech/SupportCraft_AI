@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/auth/helpers";
 import { getTickets, getAgents, getDepartments, getTicketStats } from "@/features/tickets/lib/queries";
 import { TicketTable } from "@/components/tickets/list/TicketTable";
 import { TicketFilters } from "@/components/tickets/list/TicketFilters";
-import type { TicketStatus, TicketPriority, TicketRow } from "@/types/database";
+import type { TicketStatus, TicketPriority } from "@/lib/generated/prisma/client";
 
 export const metadata: Metadata = { title: "Tickets — SupportCraft AI" };
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ interface Props {
 export default async function TicketsPage({ searchParams }: Props) {
   const sp = await searchParams;
   const { profile } = await requireAuth();
-  const orgId = profile.org_id;
+  const orgId = profile.organizationId;
 
   const [{ tickets, total, page, pages }, agents, departments, stats] = await Promise.all([
     getTickets(orgId, {
@@ -39,7 +39,7 @@ export default async function TicketsPage({ searchParams }: Props) {
       assigneeId: sp.assignee && sp.assignee !== "unassigned" ? sp.assignee : undefined,
       department: sp.department || undefined,
       unassigned: sp.assignee === "unassigned" ? true : undefined,
-      sort:       (sp.sort as "created_at" | "updated_at" | "priority" | "status") || "updated_at",
+      sort:       (sp.sort as "created_at" | "updated_at" | "priority" | "status" | "ticket_number") || "updated_at",
       order:      (sp.order as "asc" | "desc") || "desc",
       page:       sp.page ? parseInt(sp.page) : 1,
     }),
@@ -120,7 +120,7 @@ export default async function TicketsPage({ searchParams }: Props) {
 
         {/* Table */}
         <TicketTable
-          tickets={tickets as unknown as TicketRow[]}
+          tickets={tickets}
           total={total}
           page={page}
           pages={pages}

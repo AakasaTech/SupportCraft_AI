@@ -1,4 +1,4 @@
-import type { TicketPriority } from "@/types/database";
+import type { TicketPriority } from "@/lib/generated/prisma/client";
 
 // ─── SLA thresholds (hours) ───────────────────────────────────────────────────
 // first_response / resolution per priority
@@ -45,10 +45,10 @@ function toStatus(hoursRemaining: number): SLAStatus {
 }
 
 export function computeSLA(
-  createdAt:      string,
+  createdAt:      string | Date,
   priority:       TicketPriority,
-  firstResponseAt?: string | null,
-  resolvedAt?:      string | null,
+  firstResponseAt?: string | Date | null,
+  resolvedAt?:      string | Date | null,
 ): SLAInfo {
   const created  = new Date(createdAt);
   const thresholds = SLA_THRESHOLDS[priority] ?? SLA_THRESHOLDS.medium;
