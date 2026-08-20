@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import type { Adapter } from "next-auth/adapters";
 import type { Provider } from "next-auth/providers";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -8,6 +9,20 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { sendVerificationRequest } from "@/lib/auth/sendVerificationRequest";
 import { slugify } from "@/lib/utils";
+
+// The `users` table deliberately has no `name` column — display name lives on
+// `Profile.fullName` instead. @auth/prisma-adapter's default createUser()
+// always forwards `name` from the OAuth profile, which Prisma rejects since
+// it isn't a real column. Strip it before delegating to the real adapter;
+// `user.name` is still available (from the provider profile, not the DB) to
+// the `linkAccount` event below when it seeds the new Profile.
+function buildAdapter(): Adapter {
+  const base = PrismaAdapter(prisma);
+  return {
+    ...base,
+    createUser: ({ name: _name, ...data }) => base.createUser!(data as never),
+  };
+}
 
 const providers: Provider[] = [
   Credentials({
@@ -51,7 +66,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   trustHost: true,
-  adapter: PrismaAdapter(prisma),
+  adapter: buildAdapter(),
   providers,
   callbacks: {
     ...authConfig.callbacks,
@@ -70,11 +85,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // firing this event, whereas `signIn` runs earlier, before that row
     // exists — writing a Profile there hit a foreign-key violation on every
     // first-time Google sign-in (surfaced to users as a bare AccessDenied).
-    async linkAccount({ user, account }) {
+    async linkAccount({ user, account, profile }) {
       if (account.provider === "google" && user.id) {
         const existingProfile = await prisma.profile.findUnique({ where: { userId: user.id } });
         if (!existingProfile) {
-          const fullName = user.name ?? user.email?.split("@")[0] ?? "User";
+          // `user.name` isn't populated — the adapter strips it before create()
+          // since `users` has no `name` column. `profile` is Google's raw
+          // OAuth payload, untouched by that, so read the display name from there.
+          const fullName =
+            (typeof profile?.name === "string" ? profile.name : undefined) ??
+            user.email?.split("@")[0] ??
+            "User";
           const orgName = `${fullName}'s Workspace`;
           const slug = `${slugify(orgName)}-${Math.random().toString(36).slice(2, 7)}`;
 
