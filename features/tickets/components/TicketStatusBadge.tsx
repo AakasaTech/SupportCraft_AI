@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { TicketStatus, TicketPriority } from "@/types/database";
+import type { TicketStatus, TicketPriority } from "@/lib/generated/prisma/client";
 
 const STATUS_CONFIG: Record<TicketStatus, { label: string; variant: "default" | "secondary" | "success" | "warning" | "destructive" | "outline" }> = {
   new:         { label: "New",         variant: "outline"     },

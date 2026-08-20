@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 import { PortalProfileForm } from "./PortalProfileForm";
 import { User } from "lucide-react";
@@ -8,8 +8,7 @@ import { User } from "lucide-react";
 export const metadata: Metadata = { title: "Profile" };
 
 export default async function PortalProfilePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateApiKey } from '@/lib/api-auth'
-import { createAdminClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/prisma'
 
 // ── POST /api/v1/tickets/:id/notes ───────────────────────────────────────────
 // Body: { content: string; is_internal?: boolean }
@@ -26,44 +26,40 @@ export async function POST(
 
   const isInternal = body.is_internal !== false // default true
 
-  const db = createAdminClient()
-
   // Verify ticket belongs to this org
-  const { data: ticket } = await db
-    .from('tickets')
-    .select('id')
-    .eq('id', ticketId)
-    .eq('org_id', auth.orgId)
-    .single()
+  const ticket = await prisma.ticket.findFirst({
+    where: { id: ticketId, organizationId: auth.orgId },
+    select: { id: true },
+  })
 
   if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
 
-  const { data: message, error } = await db
-    .from('ticket_messages')
-    .insert({
-      ticket_id:   ticketId,
-      author_id:   null,       // API-created — no agent profile
-      content,
-      is_internal: isInternal,
-      is_customer: false,
-      is_ai:       false,
-      metadata:    { source: 'api', via: 'taskcraft' },
+  let message
+  try {
+    message = await prisma.ticketMessage.create({
+      data: {
+        ticketId,
+        authorId:   null, // API-created — no agent profile
+        content,
+        isInternal,
+        isCustomer: false,
+        isAi:       false,
+        metadata:   { source: 'api', via: 'taskcraft' },
+      },
+      select: { id: true, ticketId: true, content: true, isInternal: true, createdAt: true },
     })
-    .select('id, ticket_id, content, is_internal, created_at')
-    .single()
-
-  if (error || !message) {
-    return NextResponse.json({ error: error?.message ?? 'Failed to add note' }, { status: 500 })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to add note' }, { status: 500 })
   }
 
   return NextResponse.json({
     data: {
       id:          message.id,
-      ticket_id:   message.ticket_id,
+      ticket_id:   message.ticketId,
       content:     message.content,
       author:      'TaskCraft AI',
-      is_internal: message.is_internal,
-      created_at:  message.created_at,
+      is_internal: message.isInternal,
+      created_at:  message.createdAt,
     },
   }, { status: 201 })
 }

@@ -7,7 +7,7 @@ export const articleSchema = z.object({
   status:          z.enum(["draft", "review", "published", "archived"]).default("draft"),
   visibility:      z.enum(["public", "internal", "private"]).default("public"),
   category:        z.string().max(50).optional(),
-  category_id:     z.string().uuid().optional().nullable(),
+  category_id:     z.string().min(1).optional().nullable(),
   tags:            z.array(z.string()).default([]),
   seo_title:       z.string().max(70).optional(),
   seo_description: z.string().max(160).optional(),

@@ -1,4 +1,4 @@
-import type { UserRole } from "@/types/database";
+import type { UserRole } from "@/lib/generated/prisma/client";
 
 // Role hierarchy: owner > admin > agent > viewer
 const ROLE_RANK: Record<UserRole, number> = {

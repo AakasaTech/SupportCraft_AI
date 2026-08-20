@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { TicketIcon, Plus } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { cn } from "@/lib/utils";
@@ -28,8 +29,7 @@ const STATUS_VARIANT: Record<string, string> = {
 };
 
 export default async function PortalTicketsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");
@@ -52,12 +52,15 @@ export default async function PortalTicketsPage() {
   const customerOrgMap = new Map(customers.map((c) => [c.id, c.org_name]));
   const primaryEmail   = customers[0].email;
 
-  const admin = createAdminClient();
-  const { data: tickets } = await admin
-    .from("tickets")
-    .select("id, ticket_number, title, status, priority, created_at, updated_at, customer_id")
-    .in("customer_id", customerIds)
-    .order("updated_at", { ascending: false });
+  const ticketRows = await prisma.ticket.findMany({
+    where: { customerId: { in: customerIds } },
+    select: { id: true, ticketNumber: true, title: true, status: true, priority: true, createdAt: true, updatedAt: true, customerId: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  const tickets = ticketRows.map((t) => ({
+    id: t.id, ticket_number: t.ticketNumber, title: t.title, status: t.status, priority: t.priority,
+    created_at: t.createdAt, updated_at: t.updatedAt, customer_id: t.customerId!,
+  }));
 
   if (!tickets?.length) {
     return (

@@ -1,31 +1,24 @@
-import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth/helpers'
+import { prisma } from '@/lib/prisma'
 import { Header } from '@/components/shared/Header'
 import { WebhooksClient } from './_components/WebhooksClient'
 
 export const metadata: Metadata = { title: 'Webhooks — Settings' }
 
 export default async function WebhooksPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const user = await requireAuth()
+  const canManage = ['owner', 'admin'].includes(user.profile.role)
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('org_id, role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.org_id) redirect('/login')
-
-  const canManage = ['owner', 'admin'].includes(profile.role)
-
-  const { data: webhooks } = await supabase
-    .from('outbound_webhooks')
-    .select('id, name, url, events, enabled, secret, last_fired_at, last_status, created_at')
-    .eq('org_id', profile.org_id)
-    .order('created_at', { ascending: false })
+  const rows = await prisma.outboundWebhook.findMany({
+    where:   { organizationId: user.profile.organizationId },
+    select:  { id: true, name: true, url: true, events: true, enabled: true, secret: true, lastFiredAt: true, lastStatus: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  const webhooks = rows.map((w) => ({
+    id: w.id, name: w.name, url: w.url, events: w.events, enabled: w.enabled, secret: w.secret,
+    last_fired_at: w.lastFiredAt?.toISOString() ?? null, last_status: w.lastStatus, created_at: w.createdAt.toISOString(),
+  }))
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://supportcraft.aakasa.dev'
 

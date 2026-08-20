@@ -1,43 +1,28 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Key, Mail, MessageSquareText, ChevronRight, Webhook } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/shared/Header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OrgSettingsForm } from "@/features/settings/components/OrgSettingsForm";
 import { ProfileSettingsForm } from "@/features/settings/components/ProfileSettingsForm";
 import { getOrgEmail } from "@/lib/email/platform-provider";
-import type { Organization, Profile } from "@/types/database";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const admin = createAdminClient();
-
-  const { data: profileRow } = await supabase
-    .from("profiles")
-    .select("*, organizations(*)")
-    .eq("id", user.id)
-    .single();
-
-  if (!profileRow) redirect("/login");
-
-  const profile = profileRow as Profile & { organizations: Organization };
+  const user = await requireAuth();
+  const { profile, organization } = user;
 
   // Derive the canonical support email from email_settings so it stays in sync
-  const { data: emailSettings } = await admin
-    .from("email_settings")
-    .select("tenant_slug")
-    .eq("org_id", profile.org_id)
-    .single();
+  const emailSettings = await prisma.emailSettings.findUnique({
+    where:  { organizationId: profile.organizationId },
+    select: { tenantSlug: true },
+  });
 
-  const derivedSupportEmail = emailSettings?.tenant_slug
-    ? getOrgEmail(emailSettings.tenant_slug)
+  const derivedSupportEmail = emailSettings?.tenantSlug
+    ? getOrgEmail(emailSettings.tenantSlug)
     : null;
 
   return (
@@ -54,7 +39,7 @@ export default async function SettingsPage() {
           </TabsContent>
           <TabsContent value="organization">
             <OrgSettingsForm
-              org={profile.organizations}
+              org={organization}
               isAdmin={["owner", "admin"].includes(profile.role)}
               derivedSupportEmail={derivedSupportEmail}
             />

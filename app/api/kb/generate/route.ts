@@ -1,26 +1,20 @@
 import { NextResponse }       from "next/server";
-import { createClient }       from "@/lib/supabase/server";
+import { getCurrentUser }     from "@/lib/auth/helpers";
 import { callAIProvider }     from "@/lib/ai/provider";
 import { checkAILimits, trackUsage, estimateCost } from "@/lib/ai/usage";
-import type { OrgPlan }       from "@/types/database";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-
-  const { data: org } = await supabase
-    .from("organizations").select("plan, freepass_plan, freepass_until").eq("id", profile.org_id).single();
-  if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
-
   const { resolveEffectivePlan } = await import("@/lib/plans");
-  const effectivePlan = resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const effectivePlan = resolveEffectivePlan({
+    plan: user.organization.plan,
+    freepass_plan: user.organization.freepassPlan,
+    freepass_until: user.organization.freepassUntil?.toISOString() ?? null,
+  });
 
-  const { allowed } = await checkAILimits(profile.org_id, effectivePlan);
+  const { allowed } = await checkAILimits(user.profile.organizationId, effectivePlan);
   if (!allowed) return NextResponse.json({ error: "Monthly AI limit reached." }, { status: 429 });
 
   const { topic, keywords, tone = "Professional", length = "Medium (600 words)" } =
@@ -62,7 +56,7 @@ ${keywords ? `Keywords to include: ${keywords}` : ""}`;
     }
 
     await trackUsage({
-      orgId: profile.org_id, feature: "kb_generate", provider: result.provider,
+      orgId: user.profile.organizationId, feature: "kb_generate", provider: result.provider,
       model: result.model, tokensUsed: result.tokensUsed, promptTokens: result.promptTokens,
       completionTokens: result.completionTokens, latencyMs: result.latencyMs,
       estimatedCostUsd: estimateCost(result.model, result.promptTokens, result.completionTokens),

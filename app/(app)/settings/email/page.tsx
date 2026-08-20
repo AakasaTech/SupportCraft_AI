@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Info } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { EmailSettingsForm } from "@/components/email/settings/EmailSettingsForm";
 import { getOrgEmail } from "@/lib/email/platform-provider";
 import { AckTemplateForm } from "@/features/settings/components/AckTemplateForm";
@@ -11,21 +12,20 @@ import { getAckTemplate } from "@/features/settings/actions/emailTemplates";
 export const metadata: Metadata = { title: "Email Settings | SupportCraft" };
 
 export default async function EmailSettingsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
+  if (!["owner", "admin"].includes(user.profile.role)) redirect("/settings");
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles").select("org_id, role").eq("id", user.id).single();
-  if (!profile) redirect("/login");
-  if (!["owner", "admin"].includes(profile.role)) redirect("/settings");
-
-  const { data: settings } = await admin
-    .from("email_settings")
-    .select("tenant_slug, display_name, reply_to, signature_html, auto_reply_enabled")
-    .eq("org_id", profile.org_id)
-    .single();
+  const row = await prisma.emailSettings.findUnique({
+    where:  { organizationId: user.profile.organizationId },
+    select: { tenantSlug: true, displayName: true, replyTo: true, signatureHtml: true, autoReplyEnabled: true },
+  });
+  const settings = row && {
+    tenant_slug: row.tenantSlug ?? undefined,
+    display_name: row.displayName ?? undefined,
+    reply_to: row.replyTo ?? undefined,
+    signature_html: row.signatureHtml ?? undefined,
+    auto_reply_enabled: row.autoReplyEnabled,
+  };
 
   const supportEmail  = settings?.tenant_slug ? getOrgEmail(settings.tenant_slug) : null;
   const ackTemplate   = await getAckTemplate();

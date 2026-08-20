@@ -1,18 +1,19 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { ToggleActiveButton } from "./ToggleActiveButton";
 
 export default async function AdminUsersPage() {
-  const supabase = createAdminClient();
-
-  const { data: users } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, role, is_active, created_at, organizations(name)")
-    .order("created_at", { ascending: false });
+  const users = await prisma.profile.findMany({
+    select: {
+      id: true, fullName: true, email: true, role: true, isActive: true, createdAt: true,
+      organization: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">Users</h1>
-      <p className="text-muted-foreground mb-6">{users?.length ?? 0} total</p>
+      <p className="text-muted-foreground mb-6">{users.length} total</p>
 
       <div className="rounded-xl border border-border overflow-hidden">
         <table className="w-full text-sm">
@@ -28,13 +29,13 @@ export default async function AdminUsersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {(users ?? []).map((u) => {
-              const orgName = (u.organizations as { name?: string } | null)?.name ?? "—";
-              const isActive = u.is_active ?? true;
+            {users.map((u) => {
+              const orgName = u.organization.name ?? "—";
+              const isActive = u.isActive;
 
               return (
                 <tr key={u.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-medium">{u.full_name}</td>
+                  <td className="px-4 py-3 font-medium">{u.fullName}</td>
                   <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                   <td className="px-4 py-3 text-muted-foreground">{orgName}</td>
                   <td className="px-4 py-3">
@@ -54,7 +55,7 @@ export default async function AdminUsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {new Date(u.created_at).toLocaleDateString()}
+                    {u.createdAt.toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <ToggleActiveButton userId={u.id} isActive={isActive} />

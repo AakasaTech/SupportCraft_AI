@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   Mail, Send, Clock, TrendingUp, AlertCircle, Settings,
   BarChart2, Inbox, ArrowRight, Copy,
 } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { getOrgEmail } from "@/lib/email/platform-provider";
 import { getEmailStats } from "@/lib/email/analytics";
 import { DeliveryStatusBadge } from "@/components/email/shared/DeliveryStatusBadge";
@@ -33,39 +33,40 @@ function StatCard({ label, value, sub, icon: Icon, color = "text-primary" }: {
 }
 
 export default async function EmailPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) redirect("/login");
-
-  const [stats, { data: recentMessages }, { data: queueItems }, { data: emailSettings }] = await Promise.all([
-    getEmailStats(profile.org_id, 30),
-    admin
-      .from("email_messages")
-      .select("id, direction, from_address, to_address, subject, status, created_at")
-      .eq("org_id", profile.org_id)
-      .order("created_at", { ascending: false })
-      .limit(10),
-    admin
-      .from("email_queue")
-      .select("id, to_addresses, subject, status, priority, created_at")
-      .eq("org_id", profile.org_id)
-      .eq("status", "pending")
-      .order("priority", { ascending: false })
-      .limit(5),
-    admin
-      .from("email_settings")
-      .select("tenant_slug, display_name")
-      .eq("org_id", profile.org_id)
-      .single(),
+  const [stats, recentMessageRows, queueRows, emailSettings] = await Promise.all([
+    getEmailStats(orgId, 30),
+    prisma.emailMessage.findMany({
+      where:   { organizationId: orgId },
+      select:  { id: true, direction: true, fromAddress: true, toAddress: true, subject: true, status: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take:    10,
+    }),
+    prisma.emailQueue.findMany({
+      where:   { organizationId: orgId, status: "pending" },
+      select:  { id: true, toAddresses: true, subject: true, status: true, priority: true, createdAt: true },
+      orderBy: { priority: "desc" },
+      take:    5,
+    }),
+    prisma.emailSettings.findUnique({
+      where:  { organizationId: orgId },
+      select: { tenantSlug: true, displayName: true },
+    }),
   ]);
 
-  const notConfigured  = !emailSettings?.tenant_slug;
-  const supportEmail   = emailSettings?.tenant_slug ? getOrgEmail(emailSettings.tenant_slug) : null;
+  const recentMessages = recentMessageRows.map((m) => ({
+    id: m.id, direction: m.direction, from_address: m.fromAddress, to_address: m.toAddress,
+    subject: m.subject, status: m.status, created_at: m.createdAt,
+  }));
+  const queueItems = queueRows.map((q) => ({
+    id: q.id, to_addresses: q.toAddresses, subject: q.subject, status: q.status,
+    priority: q.priority, created_at: q.createdAt,
+  }));
+
+  const notConfigured  = !emailSettings?.tenantSlug;
+  const supportEmail   = emailSettings?.tenantSlug ? getOrgEmail(emailSettings.tenantSlug) : null;
 
   return (
     <div className="space-y-6">
@@ -121,8 +122,8 @@ export default async function EmailPage() {
             <p className="text-xs text-muted-foreground">Inbound &amp; outbound address</p>
             <p className="text-sm font-semibold text-foreground truncate">{supportEmail}</p>
           </div>
-          {emailSettings?.display_name && (
-            <span className="text-xs text-muted-foreground hidden sm:block shrink-0">{emailSettings.display_name}</span>
+          {emailSettings?.displayName && (
+            <span className="text-xs text-muted-foreground hidden sm:block shrink-0">{emailSettings.displayName}</span>
           )}
         </div>
       )}

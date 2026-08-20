@@ -1,38 +1,37 @@
 import type { Metadata } from "next";
-import { redirect }      from "next/navigation";
 import Link              from "next/link";
 import { ArrowLeft, Plus, Folder } from "lucide-react";
-import { createClient }  from "@/lib/supabase/server";
+import { requireAuth }  from "@/lib/auth/helpers";
+import { prisma }       from "@/lib/prisma";
 import { CategoryManagerClient } from "./CategoryManagerClient";
 
 export const metadata: Metadata = { title: "KB Categories" };
 
 export default async function CategoriesPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) redirect("/login");
+  const [categoryRows, counts] = await Promise.all([
+    prisma.kbCategory.findMany({
+      where:   { organizationId: orgId },
+      select:  { id: true, name: true, slug: true, description: true, icon: true, sortOrder: true, isArchived: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+    // Article count per category
+    prisma.knowledgeArticle.findMany({
+      where:  { organizationId: orgId, status: "published" },
+      select: { categoryId: true },
+    }),
+  ]);
 
-  const { data: categories } = await supabase
-    .from("kb_categories")
-    .select("id, name, slug, description, icon, sort_order, is_archived")
-    .eq("org_id", profile.org_id)
-    .order("sort_order")
-    .order("name");
-
-  // Article count per category
-  const { data: counts } = await supabase
-    .from("knowledge_articles")
-    .select("category_id")
-    .eq("org_id", profile.org_id)
-    .eq("status", "published");
+  const categories = categoryRows.map((c) => ({
+    id: c.id, name: c.name, slug: c.slug, description: c.description, icon: c.icon,
+    sort_order: c.sortOrder, is_archived: c.isArchived,
+  }));
 
   const countMap: Record<string, number> = {};
-  (counts ?? []).forEach((a) => {
-    if (a.category_id) countMap[a.category_id] = (countMap[a.category_id] ?? 0) + 1;
+  counts.forEach((a) => {
+    if (a.categoryId) countMap[a.categoryId] = (countMap[a.categoryId] ?? 0) + 1;
   });
 
   return (

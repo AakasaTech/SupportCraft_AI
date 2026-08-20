@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Bot, User } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 import { PortalReplyForm } from "./PortalReplyForm";
 import { CSATRating } from "./CSATRating";
@@ -18,38 +19,41 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PortalTicketDetailPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");
   if (customers.length === 0) redirect("/portal/tickets");
 
   const customerIds = customers.map((c) => c.id);
-  const admin       = createAdminClient();
 
-  const { data: ticket } = await admin
-    .from("tickets")
-    .select("id, ticket_number, title, status, priority, description, created_at, customer_id")
-    .eq("id", id)
-    .in("customer_id", customerIds)
-    .single();
+  const ticketRow = await prisma.ticket.findFirst({
+    where: { id, customerId: { in: customerIds } },
+    select: { id: true, ticketNumber: true, title: true, status: true, priority: true, description: true, createdAt: true, customerId: true },
+  });
 
-  if (!ticket) notFound();
+  if (!ticketRow) notFound();
+  const ticket = {
+    id: ticketRow.id, ticket_number: ticketRow.ticketNumber, title: ticketRow.title,
+    status: ticketRow.status, priority: ticketRow.priority, description: ticketRow.description,
+    created_at: ticketRow.createdAt, customer_id: ticketRow.customerId!,
+  };
 
-  const [{ data: messages }, { data: existingRating }] = await Promise.all([
-    admin
-      .from("ticket_messages")
-      .select("id, content, is_ai, is_customer, created_at")
-      .eq("ticket_id", id)
-      .eq("is_internal", false)
-      .order("created_at"),
-    admin
-      .from("ticket_ratings")
-      .select("id, rating, comment")
-      .eq("ticket_id", id)
-      .maybeSingle(),
+  const [messageRows, ratingRow] = await Promise.all([
+    prisma.ticketMessage.findMany({
+      where: { ticketId: id, isInternal: false },
+      select: { id: true, content: true, isAi: true, isCustomer: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.ticketRating.findUnique({
+      where: { ticketId: id },
+      select: { id: true, rating: true, comment: true },
+    }),
   ]);
+  const messages = messageRows.map((m) => ({
+    id: m.id, content: m.content, is_ai: m.isAi, is_customer: m.isCustomer, created_at: m.createdAt,
+  }));
+  const existingRating = ratingRow;
 
   const canReply  = !["resolved", "closed"].includes(ticket.status);
   const isResolved = ["resolved", "closed"].includes(ticket.status);

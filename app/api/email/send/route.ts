@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { getPlatformProvider, getOrgEmail } from "@/lib/email/platform-provider";
 import { renderTemplate, buildDefaultVariables } from "@/lib/email/templates";
 import { enqueueEmail } from "@/lib/email/queue";
@@ -8,17 +9,8 @@ import type { OutboundEmailMessage } from "@/lib/email/types";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("org_id, full_name")
-    .eq("id", user.id)
-    .single();
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
@@ -43,18 +35,17 @@ export async function POST(req: NextRequest) {
   }
 
   // Get org email settings (for display name, slug, signature, reply-to)
-  const { data: settings } = await admin
-    .from("email_settings")
-    .select("tenant_slug, display_name, reply_to, signature_html")
-    .eq("org_id", profile.org_id)
-    .single();
+  const settings = await prisma.emailSettings.findUnique({
+    where:  { organizationId: user.profile.organizationId },
+    select: { tenantSlug: true, displayName: true, replyTo: true, signatureHtml: true },
+  });
 
-  if (!settings?.tenant_slug) {
+  if (!settings?.tenantSlug) {
     return NextResponse.json({ error: "Support email address not configured. Set a tenant slug in Settings → Email." }, { status: 400 });
   }
 
   // From address is always slug@supportcraft.aakasa.dev
-  const fromAddress = getOrgEmail(settings.tenant_slug);
+  const fromAddress = getOrgEmail(settings.tenantSlug);
   const toAddresses = Array.isArray(to) ? to : [to];
 
   // Render template if provided
@@ -62,8 +53,8 @@ export async function POST(req: NextRequest) {
   let finalText = text as string | undefined;
   if (templateSlug) {
     const vars = buildDefaultVariables({
-      agentName:        profile.full_name ?? "Support Team",
-      organizationName: settings.display_name ?? "",
+      agentName:        user.profile.fullName ?? "Support Team",
+      organizationName: settings.displayName ?? "",
       supportEmail:     fromAddress,
       ...templateVars,
     });
@@ -75,14 +66,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Append org signature
-  if (settings.signature_html && finalHtml) {
-    finalHtml = `${finalHtml}<br/><br/><div class="email-signature">${settings.signature_html}</div>`;
+  if (settings.signatureHtml && finalHtml) {
+    finalHtml = `${finalHtml}<br/><br/><div class="email-signature">${settings.signatureHtml}</div>`;
   }
 
   // Queue mode — defer sending to background processor
   if (queued) {
     const queueId = await enqueueEmail({
-      orgId:       profile.org_id,
+      orgId:       user.profile.organizationId,
       toAddresses,
       ccAddresses: cc ? (Array.isArray(cc) ? cc : [cc]) : [],
       fromAddress,
@@ -101,10 +92,10 @@ export async function POST(req: NextRequest) {
   const provider = getPlatformProvider();
 
   const msg: OutboundEmailMessage = {
-    from:       { address: fromAddress, name: settings.display_name ?? undefined },
+    from:       { address: fromAddress, name: settings.displayName ?? undefined },
     to:         toAddresses.map((a: string) => ({ address: a })),
     cc:         cc ? (Array.isArray(cc) ? cc : [cc]).map((a: string) => ({ address: a })) : undefined,
-    replyTo:    settings.reply_to ?? fromAddress, // reply-to defaults to the same address
+    replyTo:    settings.replyTo ?? fromAddress, // reply-to defaults to the same address
     subject,
     html:       finalHtml,
     text:       finalText,
@@ -118,32 +109,30 @@ export async function POST(req: NextRequest) {
   }
 
   // Record in email_messages
-  const { data: emailMsg } = await admin
-    .from("email_messages")
-    .insert({
-      org_id:             profile.org_id,
-      ticket_id:          ticketId ?? null,
-      direction:          "outbound",
-      message_id:         result.messageId,
-      in_reply_to:        replyToMessageId ?? null,
-      references:         references ?? [],
-      from_address:       fromAddress,
-      to_address:         toAddresses.join(","),
+  const emailMsg = await prisma.emailMessage.create({
+    data: {
+      organizationId: user.profile.organizationId,
+      ticketId:          ticketId ?? null,
+      direction:         "outbound",
+      messageId:         result.messageId,
+      inReplyTo:         replyToMessageId ?? null,
+      messageReferences: references ?? [],
+      fromAddress,
+      toAddress:         toAddresses.join(","),
       subject,
-      body_html:          finalHtml,
-      body_plain:         finalText,
-      provider:           process.env.EMAIL_PROVIDER ?? "smtp",
-      provider_message_id: result.messageId,
-      status:             "sent",
-      sent_at:            new Date().toISOString(),
-    })
-    .select("id")
-    .single();
+      bodyHtml:          finalHtml,
+      bodyPlain:         finalText,
+      provider:          process.env.EMAIL_PROVIDER ?? "smtp",
+      providerMessageId: result.messageId,
+      status:            "sent",
+      sentAt:            new Date(),
+    },
+    select: { id: true },
+  });
 
-  if (emailMsg) {
-    await admin.from("email_delivery_events")
-      .insert({ email_message_id: emailMsg.id, event_type: "sent" });
-  }
+  await prisma.emailDeliveryEvent.create({
+    data: { emailMessageId: emailMsg.id, eventType: "sent" },
+  });
 
-  return NextResponse.json({ success: true, messageId: result.messageId, emailMessageId: emailMsg?.id });
+  return NextResponse.json({ success: true, messageId: result.messageId, emailMessageId: emailMsg.id });
 }

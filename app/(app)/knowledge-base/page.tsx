@@ -1,10 +1,11 @@
-import { redirect }     from "next/navigation";
 import type { Metadata } from "next";
 import Link              from "next/link";
 import {
   Plus, Search, BookOpen, Folder, TrendingUp, BarChart2, Settings,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma }      from "@/lib/prisma";
+import type { Prisma, ArticleStatus } from "@/lib/generated/prisma/client";
 import { cn }           from "@/lib/utils";
 import { formatDate }   from "@/lib/utils";
 
@@ -39,38 +40,46 @@ export default async function KnowledgeBasePage({ searchParams }: Props) {
   const statusFilter = sp.status ?? "";
   const catFilter    = sp.category_id ?? "";
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) redirect("/login");
+  const articleWhere: Prisma.KnowledgeArticleWhereInput = {
+    organizationId: orgId,
+    ...(statusFilter ? { status: statusFilter as ArticleStatus } : {}),
+    ...(catFilter ? { categoryId: catFilter } : {}),
+    ...(query
+      ? {
+          OR: [
+            { title:   { contains: query, mode: "insensitive" } },
+            { excerpt: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
 
-  const [{ data: categories }, articlesResult] = await Promise.all([
-    supabase
-      .from("kb_categories")
-      .select("id, name, icon, slug")
-      .eq("org_id", profile.org_id)
-      .eq("is_archived", false)
-      .order("sort_order"),
-
-    (() => {
-      let q = supabase
-        .from("knowledge_articles")
-        .select("id, title, excerpt, status, visibility, category, category_id, tags, views_count, helpful_votes, reading_time_min, updated_at, published_at")
-        .eq("org_id", profile.org_id)
-        .order("updated_at", { ascending: false });
-
-      if (statusFilter) q = q.eq("status", statusFilter);
-      if (catFilter)    q = q.eq("category_id", catFilter);
-      if (query)        q = q.or(`title.ilike.%${query}%,excerpt.ilike.%${query}%`);
-
-      return q;
-    })(),
+  const [categories, articleRows] = await Promise.all([
+    prisma.kbCategory.findMany({
+      where:   { organizationId: orgId, isArchived: false },
+      select:  { id: true, name: true, icon: true, slug: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.knowledgeArticle.findMany({
+      where:  articleWhere,
+      select: {
+        id: true, title: true, excerpt: true, status: true, visibility: true, category: true,
+        categoryId: true, tags: true, viewsCount: true, helpfulVotes: true, readingTimeMin: true,
+        updatedAt: true, publishedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
   ]);
 
-  const articles = articlesResult.data ?? [];
+  const articles = articleRows.map((a) => ({
+    id: a.id, title: a.title, excerpt: a.excerpt, status: a.status, visibility: a.visibility,
+    category: a.category, category_id: a.categoryId, tags: a.tags, views_count: a.viewsCount,
+    helpful_votes: a.helpfulVotes, reading_time_min: a.readingTimeMin, updated_at: a.updatedAt,
+    published_at: a.publishedAt,
+  }));
 
   const totalPublished = articles.filter((a) => a.status === "published").length;
   const totalDrafts    = articles.filter((a) => a.status === "draft").length;
@@ -79,7 +88,7 @@ export default async function KnowledgeBasePage({ searchParams }: Props) {
 
   // Category lookup
   const catMap: Record<string, { name: string; icon: string | null }> = {};
-  (categories ?? []).forEach((c) => { catMap[c.id] = { name: c.name, icon: c.icon }; });
+  categories.forEach((c) => { catMap[c.id] = { name: c.name, icon: c.icon }; });
 
   return (
     <div className="space-y-6">

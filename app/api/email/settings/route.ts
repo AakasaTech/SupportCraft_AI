@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { getOrgEmail } from "@/lib/email/platform-provider";
 import { z } from "zod";
 
@@ -17,20 +19,23 @@ const settingsSchema = z.object({
 });
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const row = await prisma.emailSettings.findUnique({
+    where:  { organizationId: user.profile.organizationId },
+    select: { tenantSlug: true, displayName: true, replyTo: true, signatureHtml: true, footerHtml: true, autoReplyEnabled: true, autoReplyConfig: true },
+  });
 
-  const { data: settings } = await admin
-    .from("email_settings")
-    .select("tenant_slug, display_name, reply_to, signature_html, footer_html, auto_reply_enabled, auto_reply_config")
-    .eq("org_id", profile.org_id)
-    .single();
+  const settings = row && {
+    tenant_slug:        row.tenantSlug,
+    display_name:       row.displayName,
+    reply_to:           row.replyTo,
+    signature_html:     row.signatureHtml,
+    footer_html:        row.footerHtml,
+    auto_reply_enabled: row.autoReplyEnabled,
+    auto_reply_config:  row.autoReplyConfig,
+  };
 
   return NextResponse.json({
     settings: settings ?? null,
@@ -39,15 +44,9 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles").select("org_id, role").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!["owner", "admin"].includes(profile.role)) {
+  if (!["owner", "admin"].includes(user.profile.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -59,12 +58,10 @@ export async function PUT(req: NextRequest) {
 
   // Check slug uniqueness (exclude current org)
   const slug = parsed.data.tenant_slug;
-  const { data: conflict } = await admin
-    .from("email_settings")
-    .select("org_id")
-    .eq("tenant_slug", slug)
-    .neq("org_id", profile.org_id)
-    .single();
+  const conflict = await prisma.emailSettings.findFirst({
+    where:  { tenantSlug: slug, organizationId: { not: user.profile.organizationId } },
+    select: { organizationId: true },
+  });
 
   if (conflict) {
     return NextResponse.json(
@@ -73,31 +70,49 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  const { data, error } = await admin
-    .from("email_settings")
-    .upsert(
-      {
-        org_id:      profile.org_id,
-        // Derive the canonical support_email from slug — always identical
-        support_email: getOrgEmail(slug),
-        ...parsed.data,
-        updated_at:  new Date().toISOString(),
-      },
-      { onConflict: "org_id" }
-    )
-    .select("tenant_slug, display_name, reply_to, signature_html, auto_reply_enabled")
-    .single();
+  // Derive the canonical support_email from slug — always identical
+  const supportEmail = getOrgEmail(slug);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const data = await prisma.emailSettings.upsert({
+    where: { organizationId: user.profile.organizationId },
+    create: {
+      organizationId: user.profile.organizationId,
+      supportEmail,
+      tenantSlug:       parsed.data.tenant_slug,
+      displayName:      parsed.data.display_name,
+      replyTo:          parsed.data.reply_to || undefined,
+      signatureHtml:    parsed.data.signature_html,
+      footerHtml:        parsed.data.footer_html,
+      autoReplyEnabled: parsed.data.auto_reply_enabled,
+      autoReplyConfig:  parsed.data.auto_reply_config as Prisma.InputJsonValue | undefined,
+    },
+    update: {
+      supportEmail,
+      tenantSlug:       parsed.data.tenant_slug,
+      displayName:      parsed.data.display_name,
+      replyTo:          parsed.data.reply_to || undefined,
+      signatureHtml:    parsed.data.signature_html,
+      footerHtml:        parsed.data.footer_html,
+      autoReplyEnabled: parsed.data.auto_reply_enabled,
+      autoReplyConfig:  parsed.data.auto_reply_config as Prisma.InputJsonValue | undefined,
+    },
+    select: { tenantSlug: true, displayName: true, replyTo: true, signatureHtml: true, autoReplyEnabled: true },
+  });
 
   // Keep organizations.support_email in sync so email templates always use the right address
-  await admin
-    .from("organizations")
-    .update({ support_email: getOrgEmail(slug) })
-    .eq("id", profile.org_id);
+  await prisma.organization.update({
+    where: { id: user.profile.organizationId },
+    data:  { supportEmail },
+  });
 
   return NextResponse.json({
-    settings:      data,
-    support_email: getOrgEmail(slug),
+    settings: {
+      tenant_slug:        data.tenantSlug,
+      display_name:       data.displayName,
+      reply_to:           data.replyTo,
+      signature_html:     data.signatureHtml,
+      auto_reply_enabled: data.autoReplyEnabled,
+    },
+    support_email: supportEmail,
   });
 }

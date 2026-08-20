@@ -1,30 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
+import type { EmailQueueStatus } from "@/lib/generated/prisma/client";
 import { processQueue } from "@/lib/email/queue";
 
 export const runtime = "nodejs";
 
 /** GET — list queue items for the org */
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const status = (req.nextUrl.searchParams.get("status") ?? "pending") as EmailQueueStatus;
+  const rows = await prisma.emailQueue.findMany({
+    where:   { organizationId: user.profile.organizationId, status },
+    select:  { id: true, toAddresses: true, subject: true, priority: true, status: true, retryCount: true, errorMessage: true, createdAt: true, processedAt: true },
+    orderBy: { createdAt: "desc" },
+    take:    50,
+  });
 
-  const status = req.nextUrl.searchParams.get("status") ?? "pending";
-  const { data: items } = await admin
-    .from("email_queue")
-    .select("id, to_addresses, subject, priority, status, retry_count, error_message, created_at, processed_at")
-    .eq("org_id", profile.org_id)
-    .eq("status", status)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const items = rows.map((q) => ({
+    id: q.id, to_addresses: q.toAddresses, subject: q.subject, priority: q.priority,
+    status: q.status, retry_count: q.retryCount, error_message: q.errorMessage,
+    created_at: q.createdAt, processed_at: q.processedAt,
+  }));
 
-  return NextResponse.json({ items: items ?? [] });
+  return NextResponse.json({ items });
 }
 
 /** POST — trigger queue processing (call from cron or admin action) */

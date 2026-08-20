@@ -1,40 +1,23 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { generateCompletion } from "@/lib/ai";
 import { checkAIAccess } from "@/lib/ai/usage";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
+  const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("org_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) {
-    return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-  }
-
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("plan, freepass_plan, freepass_until")
-    .eq("id", profile.org_id)
-    .single();
-
-  if (!org) {
-    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
-  }
-
   const { resolveEffectivePlan } = await import("@/lib/plans");
-  const effectivePlan = resolveEffectivePlan({ plan: org.plan as import("@/types/database").OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const effectivePlan = resolveEffectivePlan({
+    plan: user.organization.plan,
+    freepass_plan: user.organization.freepassPlan,
+    freepass_until: user.organization.freepassUntil?.toISOString() ?? null,
+  });
 
-  const { allowed, reason } = await checkAIAccess(profile.org_id, effectivePlan, "ai_suggested_responses");
+  const { allowed, reason } = await checkAIAccess(user.profile.organizationId, effectivePlan, "ai_suggested_responses");
   if (!allowed) {
     return NextResponse.json({ error: reason }, { status: 429 });
   }
@@ -46,39 +29,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "ticketId is required" }, { status: 400 });
   }
 
-  const { data: ticket } = await supabase
-    .from("tickets")
-    .select("title, description, status, priority, category")
-    .eq("id", ticketId)
-    .eq("org_id", profile.org_id)
-    .single();
+  const ticket = await prisma.ticket.findFirst({
+    where:  { id: ticketId, organizationId: user.profile.organizationId },
+    select: { title: true, description: true, status: true, priority: true, category: true },
+  });
 
   if (!ticket) {
     return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
   }
 
-  const { data: messages } = await supabase
-    .from("ticket_messages")
-    .select("content, is_customer, is_ai, created_at")
-    .eq("ticket_id", ticketId)
-    .order("created_at", { ascending: true })
-    .limit(20);
-
-  const { data: articles } = await supabase
-    .from("knowledge_articles")
-    .select("title, content")
-    .eq("org_id", profile.org_id)
-    .eq("status", "published")
-    .limit(5);
+  const [messages, articles] = await Promise.all([
+    prisma.ticketMessage.findMany({
+      where:   { ticketId },
+      select:  { content: true, isCustomer: true, isAi: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+      take:    20,
+    }),
+    prisma.knowledgeArticle.findMany({
+      where:  { organizationId: user.profile.organizationId, status: "published" },
+      select: { title: true, content: true },
+      take:   5,
+    }),
+  ]);
 
   const kbContext =
-    articles && articles.length > 0
+    articles.length > 0
       ? `\n\nKnowledge Base Articles:\n${articles.map((a) => `**${a.title}**\n${a.content.slice(0, 500)}`).join("\n\n")}`
       : "";
 
   const conversationHistory =
-    messages && messages.length > 0
-      ? `\n\nConversation history:\n${messages.map((m) => `${m.is_customer ? "Customer" : "Agent"}: ${m.content}`).join("\n")}`
+    messages.length > 0
+      ? `\n\nConversation history:\n${messages.map((m) => `${m.isCustomer ? "Customer" : "Agent"}: ${m.content}`).join("\n")}`
       : "";
 
   const systemPrompt = `You are a helpful customer support agent. Write a professional, empathetic reply to the customer's ticket.
@@ -96,11 +77,13 @@ Write a reply to this ticket:`;
     { role: "user", content: userPrompt },
   ]);
 
-  await supabase.from("ai_usage_logs").insert({
-    org_id: profile.org_id,
-    feature: "suggest",
-    provider: process.env.AI_PROVIDER ?? "openai",
-    tokens_used: tokensUsed,
+  await prisma.aiUsageLog.create({
+    data: {
+      organizationId: user.profile.organizationId,
+      feature: "suggest",
+      provider: process.env.AI_PROVIDER ?? "openai",
+      tokensUsed,
+    },
   });
 
   return NextResponse.json({ suggestion: text });

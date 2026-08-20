@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { updateProfileSchema, type UpdateProfileInput } from "../schemas";
-import { createClient } from "@/lib/supabase/client";
+import { updateProfile } from "../actions/profile";
 import { useRouter } from "next/navigation";
-import type { Profile } from "@/types/database";
+import type { Profile } from "@/lib/generated/prisma/client";
 
 const TIMEZONES = [
   "UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
@@ -44,9 +44,9 @@ export function ProfileSettingsForm({ profile }: ProfileSettingsFormProps) {
   const { register, handleSubmit, formState: { errors } } = useForm<UpdateProfileInput>({
     resolver: zodResolver(updateProfileSchema),
     defaultValues: {
-      fullName: profile.full_name,
+      fullName: profile.fullName,
       phone: profile.phone ?? "",
-      job_title: profile.job_title ?? "",
+      job_title: profile.jobTitle ?? "",
       timezone: profile.timezone ?? "UTC",
       language: profile.language ?? "en",
     },
@@ -55,21 +55,10 @@ export function ProfileSettingsForm({ profile }: ProfileSettingsFormProps) {
   function onSubmit(data: UpdateProfileInput) {
     setMessage(null);
     startTransition(async () => {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: data.fullName,
-          phone: data.phone || null,
-          job_title: data.job_title || null,
-          timezone: data.timezone || "UTC",
-          language: data.language || "en",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", profile.id);
+      const result = await updateProfile(data);
 
-      if (error) {
-        setMessage({ type: "error", text: error.message });
+      if (result.error) {
+        setMessage({ type: "error", text: result.error });
       } else {
         setMessage({ type: "success", text: "Profile updated successfully" });
         router.refresh();

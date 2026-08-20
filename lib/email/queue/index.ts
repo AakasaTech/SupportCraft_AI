@@ -1,4 +1,5 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { getPlatformProvider, getOrgEmail } from "../platform-provider";
 import type { OutboundEmailMessage } from "../types";
 
@@ -18,53 +19,52 @@ export async function enqueueEmail(params: {
   ticketId?:    string | null;
   metadata?:    Record<string, unknown>;
 }): Promise<string | null> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("email_queue")
-    .insert({
-      org_id:        params.orgId,
-      to_addresses:  params.toAddresses,
-      cc_addresses:  params.ccAddresses ?? [],
-      from_address:  params.fromAddress ?? null,
-      reply_to:      params.replyTo ?? null,
-      subject:       params.subject,
-      body_html:     params.bodyHtml ?? null,
-      body_plain:    params.bodyPlain ?? null,
-      template_slug: params.templateSlug ?? null,
-      template_vars: params.templateVars ?? {},
-      priority:      params.priority ?? 5,
-      scheduled_at:  params.scheduledAt ?? null,
-      ticket_id:     params.ticketId ?? null,
-      metadata:      params.metadata ?? {},
-      status:        "pending",
-    })
-    .select("id")
-    .single();
+  const item = await prisma.emailQueue.create({
+    data: {
+      organizationId: params.orgId,
+      toAddresses:  params.toAddresses,
+      ccAddresses:  params.ccAddresses ?? [],
+      fromAddress:  params.fromAddress ?? null,
+      replyTo:      params.replyTo ?? null,
+      subject:      params.subject,
+      bodyHtml:     params.bodyHtml ?? null,
+      bodyPlain:    params.bodyPlain ?? null,
+      templateSlug: params.templateSlug ?? null,
+      templateVars: params.templateVars ?? {},
+      priority:     params.priority ?? 5,
+      scheduledAt:  params.scheduledAt ? new Date(params.scheduledAt) : null,
+      ticketId:     params.ticketId ?? null,
+      metadata:     (params.metadata ?? {}) as Prisma.InputJsonValue,
+      status:       "pending",
+    },
+    select: { id: true },
+  });
 
-  return data?.id ?? null;
+  return item.id;
 }
 
 /** Process the next batch of pending queue items. Call from a cron or API route. */
 export async function processQueue(batchSize = 10): Promise<{ processed: number; errors: number }> {
-  const admin = createAdminClient();
+  const now = new Date();
 
   // Claim pending items atomically
-  const now = new Date().toISOString();
-  const { data: items } = await admin
-    .from("email_queue")
-    .select("*")
-    .eq("status", "pending")
-    .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
-    .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
-    .order("priority", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(batchSize);
+  const items = await prisma.emailQueue.findMany({
+    where: {
+      status: "pending",
+      AND: [
+        { OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }] },
+        { OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }] },
+      ],
+    },
+    orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+    take: batchSize,
+  });
 
-  if (!items?.length) return { processed: 0, errors: 0 };
+  if (!items.length) return { processed: 0, errors: 0 };
 
   // Mark as processing
   const ids = items.map(i => i.id);
-  await admin.from("email_queue").update({ status: "processing" }).in("id", ids);
+  await prisma.emailQueue.updateMany({ where: { id: { in: ids } }, data: { status: "processing" } });
 
   let processed = 0;
   let errors    = 0;
@@ -72,63 +72,59 @@ export async function processQueue(batchSize = 10): Promise<{ processed: number;
   for (const item of items) {
     try {
       // Get org email settings
-      const { data: settings } = await admin
-        .from("email_settings")
-        .select("tenant_slug, display_name, reply_to")
-        .eq("org_id", item.org_id)
-        .single();
+      const settings = await prisma.emailSettings.findUnique({
+        where:  { organizationId: item.organizationId },
+        select: { tenantSlug: true, displayName: true, replyTo: true },
+      });
 
-      if (!settings?.tenant_slug) throw new Error("Tenant slug not configured for org");
+      if (!settings?.tenantSlug) throw new Error("Tenant slug not configured for org");
 
       const provider    = getPlatformProvider();
-      const fromAddress = item.from_address ?? getOrgEmail(settings.tenant_slug);
+      const fromAddress = item.fromAddress ?? getOrgEmail(settings.tenantSlug);
 
       const msg: OutboundEmailMessage = {
         from: {
           address: fromAddress,
-          name:    settings.display_name ?? undefined,
+          name:    settings.displayName ?? undefined,
         },
-        to:      item.to_addresses.map((a: string) => ({ address: a })),
-        cc:      item.cc_addresses?.map((a: string) => ({ address: a })),
-        replyTo: item.reply_to ?? settings.reply_to ?? fromAddress,
+        to:      item.toAddresses.map((a) => ({ address: a })),
+        cc:      item.ccAddresses?.map((a) => ({ address: a })),
+        replyTo: item.replyTo ?? settings.replyTo ?? fromAddress,
         subject: item.subject,
-        html:    item.body_html ?? undefined,
-        text:    item.body_plain ?? undefined,
+        html:    item.bodyHtml ?? undefined,
+        text:    item.bodyPlain ?? undefined,
       };
 
       const result = await provider.send(msg);
 
       if (result.success) {
         // Create email_messages record
-        const { data: emailMsg } = await admin
-          .from("email_messages")
-          .insert({
-            org_id:              item.org_id,
-            ticket_id:           item.ticket_id,
-            direction:           "outbound",
-            message_id:          result.messageId,
-            from_address:        fromAddress,
-            to_address:          item.to_addresses.join(","),
-            subject:             item.subject,
-            body_html:           item.body_html,
-            body_plain:          item.body_plain,
-            provider:            process.env.EMAIL_PROVIDER ?? "smtp",
-            provider_message_id: result.messageId,
-            status:              "sent",
-            sent_at:             new Date().toISOString(),
-          })
-          .select("id")
-          .single();
+        const emailMsg = await prisma.emailMessage.create({
+          data: {
+            organizationId:     item.organizationId,
+            ticketId:           item.ticketId,
+            direction:          "outbound",
+            messageId:          result.messageId,
+            fromAddress:        fromAddress,
+            toAddress:          item.toAddresses.join(","),
+            subject:            item.subject,
+            bodyHtml:           item.bodyHtml,
+            bodyPlain:          item.bodyPlain,
+            provider:           process.env.EMAIL_PROVIDER ?? "smtp",
+            providerMessageId:  result.messageId,
+            status:             "sent",
+            sentAt:             new Date(),
+          },
+          select: { id: true },
+        });
 
-        if (emailMsg) {
-          await admin
-            .from("email_delivery_events")
-            .insert({ email_message_id: emailMsg.id, event_type: "sent" });
-          await admin
-            .from("email_queue")
-            .update({ status: "sent", email_message_id: emailMsg.id, processed_at: new Date().toISOString() })
-            .eq("id", item.id);
-        }
+        await prisma.emailDeliveryEvent.create({
+          data: { emailMessageId: emailMsg.id, eventType: "sent" },
+        });
+        await prisma.emailQueue.update({
+          where: { id: item.id },
+          data:  { status: "sent", emailMessageId: emailMsg.id, processedAt: new Date() },
+        });
         processed++;
       } else {
         throw new Error(result.error ?? "Send failed");
@@ -136,17 +132,20 @@ export async function processQueue(batchSize = 10): Promise<{ processed: number;
 
     } catch (err) {
       errors++;
-      const retryCount = (item.retry_count ?? 0) + 1;
-      const maxRetries = item.max_retries ?? 3;
+      const retryCount = item.retryCount + 1;
+      const maxRetries = item.maxRetries;
       const backoffMs  = Math.min(1000 * Math.pow(2, retryCount), 3_600_000);
-      const nextRetry  = new Date(Date.now() + backoffMs).toISOString();
+      const nextRetry  = new Date(Date.now() + backoffMs);
 
-      await admin.from("email_queue").update({
-        status:        retryCount >= maxRetries ? "dead" : "pending",
-        retry_count:   retryCount,
-        next_retry_at: retryCount < maxRetries ? nextRetry : null,
-        error_message: String(err),
-      }).eq("id", item.id);
+      await prisma.emailQueue.update({
+        where: { id: item.id },
+        data: {
+          status:       retryCount >= maxRetries ? "dead" : "pending",
+          retryCount,
+          nextRetryAt:  retryCount < maxRetries ? nextRetry : null,
+          errorMessage: String(err),
+        },
+      });
     }
   }
 

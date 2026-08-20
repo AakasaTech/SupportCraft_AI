@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect }       from "next/navigation";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireAuth }    from "@/lib/auth/helpers";
+import { prisma }         from "@/lib/prisma";
 import { articleSchema, categorySchema }   from "../schemas";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -19,18 +20,15 @@ function makeSlug(title: string): string {
     .slice(0, 80);
 }
 
-async function ensureUniqueSlug(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string, base: string, excludeId?: string): Promise<string> {
+async function ensureUniqueSlug(orgId: string, base: string, excludeId?: string): Promise<string> {
   let slug  = base;
   let count = 0;
   while (true) {
-    const q = supabase
-      .from("knowledge_articles")
-      .select("id")
-      .eq("org_id", orgId)
-      .eq("slug", slug);
-    if (excludeId) q.neq("id", excludeId);
-    const { data } = await q.maybeSingle();
-    if (!data) return slug;
+    const existing = await prisma.knowledgeArticle.findFirst({
+      where: { organizationId: orgId, slug, ...(excludeId ? { id: { not: excludeId } } : {}) },
+      select: { id: true },
+    });
+    if (!existing) return slug;
     slug = `${base}-${++count}`;
   }
 }
@@ -38,13 +36,8 @@ async function ensureUniqueSlug(supabase: Awaited<ReturnType<typeof createClient
 // ─── Articles ─────────────────────────────────────────────────────────────────
 
 export async function createArticle(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
-
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return { error: "Profile not found" };
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
   const tagsRaw = formData.get("tags") as string;
   const parsed  = articleSchema.safeParse({
@@ -63,34 +56,42 @@ export async function createArticle(formData: FormData) {
 
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const slug = await ensureUniqueSlug(supabase, profile.org_id, makeSlug(parsed.data.title));
+  const slug = await ensureUniqueSlug(orgId, makeSlug(parsed.data.title));
+  const publishedAt = parsed.data.status === "published" ? new Date() : null;
 
-  const publishedAt = parsed.data.status === "published" ? new Date().toISOString() : null;
-
-  const { data: article, error } = await supabase
-    .from("knowledge_articles")
-    .insert({
-      ...parsed.data,
+  const article = await prisma.knowledgeArticle.create({
+    data: {
+      organizationId: orgId,
+      authorId:       user.profile.id,
+      title:           parsed.data.title,
+      content:         parsed.data.content,
+      excerpt:         parsed.data.excerpt,
+      status:          parsed.data.status,
+      visibility:      parsed.data.visibility,
+      category:        parsed.data.category,
+      categoryId:      parsed.data.category_id || null,
+      tags:            parsed.data.tags,
+      seoTitle:        parsed.data.seo_title,
+      seoDescription:  parsed.data.seo_description,
+      coverImageUrl:   parsed.data.cover_image_url || null,
       slug,
-      org_id:           profile.org_id,
-      author_id:        user.id,
-      reading_time_min: readingTime(parsed.data.content),
-      published_at:     publishedAt,
-      version:          1,
-    })
-    .select("id")
-    .single();
-
-  if (error) return { error: error.message };
+      readingTimeMin: readingTime(parsed.data.content),
+      publishedAt,
+      version: 1,
+    },
+    select: { id: true },
+  });
 
   // Save initial version
-  await supabase.from("article_versions").insert({
-    article_id:     article.id,
-    version_number: 1,
-    title:          parsed.data.title,
-    content:        parsed.data.content,
-    change_summary: "Initial version",
-    author_id:      user.id,
+  await prisma.articleVersion.create({
+    data: {
+      articleId:     article.id,
+      versionNumber: 1,
+      title:         parsed.data.title,
+      content:       parsed.data.content,
+      changeSummary: "Initial version",
+      authorId:      user.profile.id,
+    },
   });
 
   revalidatePath("/knowledge-base");
@@ -98,13 +99,8 @@ export async function createArticle(formData: FormData) {
 }
 
 export async function updateArticle(articleId: string, formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
-
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return { error: "Profile not found" };
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
   const tagsRaw = formData.get("tags") as string;
   const parsed  = articleSchema.safeParse({
@@ -124,42 +120,51 @@ export async function updateArticle(articleId: string, formData: FormData) {
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
   // Get current version number
-  const { data: current } = await supabase
-    .from("knowledge_articles")
-    .select("version, title, content, status, published_at")
-    .eq("id", articleId)
-    .single();
+  const current = await prisma.knowledgeArticle.findFirst({
+    where:  { id: articleId, organizationId: orgId },
+    select: { version: true, status: true, publishedAt: true },
+  });
 
   const newVersion    = (current?.version ?? 1) + 1;
   const changeSummary = (formData.get("change_summary") as string) || "Updated";
   const wasPublished  = current?.status === "published";
   const isPublishing  = parsed.data.status === "published" && !wasPublished;
   const publishedAt   = isPublishing
-    ? new Date().toISOString()
-    : (current?.published_at ?? null);
+    ? new Date()
+    : (current?.publishedAt ?? null);
 
-  const { error } = await supabase
-    .from("knowledge_articles")
-    .update({
-      ...parsed.data,
-      reading_time_min: readingTime(parsed.data.content),
-      version:          newVersion,
-      published_at:     publishedAt,
-      updated_at:       new Date().toISOString(),
-    })
-    .eq("id", articleId)
-    .eq("org_id", profile.org_id);
+  const { count } = await prisma.knowledgeArticle.updateMany({
+    where: { id: articleId, organizationId: orgId },
+    data: {
+      title:           parsed.data.title,
+      content:         parsed.data.content,
+      excerpt:         parsed.data.excerpt,
+      status:          parsed.data.status,
+      visibility:      parsed.data.visibility,
+      category:        parsed.data.category,
+      categoryId:      parsed.data.category_id || null,
+      tags:            parsed.data.tags,
+      seoTitle:        parsed.data.seo_title,
+      seoDescription:  parsed.data.seo_description,
+      coverImageUrl:   parsed.data.cover_image_url || null,
+      readingTimeMin: readingTime(parsed.data.content),
+      version:        newVersion,
+      publishedAt,
+    },
+  });
 
-  if (error) return { error: error.message };
+  if (count === 0) return { error: "Article not found" };
 
   // Save version snapshot
-  await supabase.from("article_versions").insert({
-    article_id:     articleId,
-    version_number: newVersion,
-    title:          parsed.data.title,
-    content:        parsed.data.content,
-    change_summary: changeSummary,
-    author_id:      user.id,
+  await prisma.articleVersion.create({
+    data: {
+      articleId,
+      versionNumber: newVersion,
+      title:         parsed.data.title,
+      content:       parsed.data.content,
+      changeSummary,
+      authorId:      user.profile.id,
+    },
   });
 
   revalidatePath(`/knowledge-base/${articleId}`);
@@ -168,62 +173,50 @@ export async function updateArticle(articleId: string, formData: FormData) {
 }
 
 export async function deleteArticle(articleId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return { error: "Profile not found" };
-
-  const { error } = await supabase
-    .from("knowledge_articles")
-    .delete()
-    .eq("id", articleId)
-    .eq("org_id", profile.org_id);
-
-  if (error) return { error: error.message };
+  await prisma.knowledgeArticle.deleteMany({
+    where: { id: articleId, organizationId: user.profile.organizationId },
+  });
 
   revalidatePath("/knowledge-base");
   redirect("/knowledge-base");
 }
 
 export async function restoreVersion(articleId: string, versionNumber: number) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
-  const { data: ver } = await supabase
-    .from("article_versions")
-    .select("title, content")
-    .eq("article_id", articleId)
-    .eq("version_number", versionNumber)
-    .single();
+  const ver = await prisma.articleVersion.findFirst({
+    where:  { articleId, versionNumber, article: { organizationId: orgId } },
+    select: { title: true, content: true },
+  });
 
   if (!ver) return { error: "Version not found" };
 
-  const { data: current } = await supabase
-    .from("knowledge_articles")
-    .select("version")
-    .eq("id", articleId)
-    .single();
+  const current = await prisma.knowledgeArticle.findFirst({
+    where:  { id: articleId, organizationId: orgId },
+    select: { version: true },
+  });
 
-  const newVersion = (current?.version ?? 1) + 1;
+  if (!current) return { error: "Article not found" };
 
-  await supabase.from("knowledge_articles").update({
-    title:   ver.title,
-    content: ver.content,
-    version: newVersion,
-    updated_at: new Date().toISOString(),
-  }).eq("id", articleId);
+  const newVersion = current.version + 1;
 
-  await supabase.from("article_versions").insert({
-    article_id:     articleId,
-    version_number: newVersion,
-    title:          ver.title,
-    content:        ver.content,
-    change_summary: `Restored from v${versionNumber}`,
-    author_id:      user.id,
+  await prisma.knowledgeArticle.update({
+    where: { id: articleId },
+    data:  { title: ver.title, content: ver.content, version: newVersion },
+  });
+
+  await prisma.articleVersion.create({
+    data: {
+      articleId,
+      versionNumber: newVersion,
+      title:         ver.title,
+      content:       ver.content,
+      changeSummary: `Restored from v${versionNumber}`,
+      authorId:      user.profile.id,
+    },
   });
 
   revalidatePath(`/knowledge-base/${articleId}`);
@@ -233,13 +226,7 @@ export async function restoreVersion(articleId: string, versionNumber: number) {
 // ─── Categories ───────────────────────────────────────────────────────────────
 
 export async function createCategory(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
-
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return { error: "Profile not found" };
+  const user = await requireAuth();
 
   const parsed = categorySchema.safeParse({
     name:       formData.get("name"),
@@ -251,24 +238,23 @@ export async function createCategory(formData: FormData) {
 
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const { error } = await supabase
-    .from("kb_categories")
-    .insert({ ...parsed.data, org_id: profile.org_id });
-
-  if (error) return { error: error.message };
+  await prisma.kbCategory.create({
+    data: {
+      organizationId: user.profile.organizationId,
+      name:        parsed.data.name,
+      slug:        parsed.data.slug,
+      description: parsed.data.description,
+      icon:        parsed.data.icon,
+      sortOrder:   parsed.data.sort_order,
+    },
+  });
 
   revalidatePath("/knowledge-base/categories");
   return { success: true };
 }
 
 export async function updateCategory(categoryId: string, formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
-
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return { error: "Profile not found" };
+  const user = await requireAuth();
 
   const parsed = categorySchema.safeParse({
     name:       formData.get("name"),
@@ -280,34 +266,29 @@ export async function updateCategory(categoryId: string, formData: FormData) {
 
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
-  const { error } = await supabase
-    .from("kb_categories")
-    .update(parsed.data)
-    .eq("id", categoryId)
-    .eq("org_id", profile.org_id);
+  const { count } = await prisma.kbCategory.updateMany({
+    where: { id: categoryId, organizationId: user.profile.organizationId },
+    data: {
+      name:        parsed.data.name,
+      slug:        parsed.data.slug,
+      description: parsed.data.description,
+      icon:        parsed.data.icon,
+      sortOrder:   parsed.data.sort_order,
+    },
+  });
 
-  if (error) return { error: error.message };
+  if (count === 0) return { error: "Category not found" };
 
   revalidatePath("/knowledge-base/categories");
   return { success: true };
 }
 
 export async function deleteCategory(categoryId: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return { error: "Profile not found" };
-
-  const { error } = await supabase
-    .from("kb_categories")
-    .delete()
-    .eq("id", categoryId)
-    .eq("org_id", profile.org_id);
-
-  if (error) return { error: error.message };
+  await prisma.kbCategory.deleteMany({
+    where: { id: categoryId, organizationId: user.profile.organizationId },
+  });
 
   revalidatePath("/knowledge-base/categories");
   return { success: true };

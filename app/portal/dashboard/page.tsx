@@ -4,7 +4,8 @@ import Link from "next/link";
 import {
   Ticket, CheckCircle2, Clock, Plus, BookOpen, ArrowRight, AlertCircle,
 } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 import { cn } from "@/lib/utils";
 
@@ -25,8 +26,7 @@ const STATUS_VARIANT: Record<string, string> = {
 };
 
 export default async function PortalDashboardPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");
@@ -54,30 +54,28 @@ export default async function PortalDashboardPage() {
   }
 
   const customerIds = customers.map((c) => c.id);
-  const admin       = createAdminClient();
 
-  const { data: tickets } = await admin
-    .from("tickets")
-    .select("id, ticket_number, title, status, updated_at")
-    .in("customer_id", customerIds)
-    .order("updated_at", { ascending: false });
-
-  const allTickets = tickets ?? [];
+  const allTickets = await prisma.ticket.findMany({
+    where: { customerId: { in: customerIds } },
+    select: { id: true, ticketNumber: true, title: true, status: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+  });
 
   const openCount     = allTickets.filter((t) => ["new", "open", "in_progress"].includes(t.status)).length;
   const pendingCount  = allTickets.filter((t) => t.status === "pending").length;
   const resolvedCount = allTickets.filter((t) => ["resolved", "closed"].includes(t.status)).length;
-  const recentTickets = allTickets.slice(0, 5);
+  const recentTickets = allTickets.slice(0, 5).map((t) => ({
+    id: t.id, ticket_number: t.ticketNumber, title: t.title, status: t.status, updated_at: t.updatedAt,
+  }));
 
   // Recent KB articles from customer's orgs
   const orgIds = [...new Set(customers.map((c) => c.org_id))];
-  const { data: articles } = await admin
-    .from("knowledge_articles")
-    .select("id, title, category")
-    .in("org_id", orgIds)
-    .eq("status", "published")
-    .order("updated_at", { ascending: false })
-    .limit(4);
+  const articles = await prisma.knowledgeArticle.findMany({
+    where: { organizationId: { in: orgIds }, status: "published" },
+    select: { id: true, title: true, category: true },
+    orderBy: { updatedAt: "desc" },
+    take: 4,
+  });
 
   return (
     <div className="space-y-8">

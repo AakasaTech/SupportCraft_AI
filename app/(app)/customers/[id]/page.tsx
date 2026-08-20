@@ -1,6 +1,7 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/shared/Header";
 import { CustomerForm } from "@/features/customers/components/CustomerForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,32 +15,28 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase.from("customers").select("name").eq("id", id).single();
-  return { title: data?.name ?? "Customer" };
+  const customer = await prisma.customer.findUnique({ where: { id }, select: { name: true } });
+  return { title: customer?.name ?? "Customer" };
 }
 
 export default async function CustomerDetailPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
+  const user = await requireAuth();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // Scoped to this agent's org — Prisma has no RLS, so this check is what
+  // stops one org's agent from viewing another org's customer by URL id.
+  const customer = await prisma.customer.findFirst({
+    where: { id, organizationId: user.profile.organizationId },
+  });
 
-  const { data: customer, error } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("id", id)
-    .single();
+  if (!customer) notFound();
 
-  if (error || !customer) notFound();
-
-  const { data: tickets } = await supabase
-    .from("tickets")
-    .select("id, title, status, priority, created_at")
-    .eq("customer_id", id)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const tickets = await prisma.ticket.findMany({
+    where:   { customerId: id },
+    select:  { id: true, title: true, status: true, priority: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take:    20,
+  });
 
   return (
     <div>
@@ -71,7 +68,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{ticket.title}</p>
-                      <p className="text-xs text-muted-foreground">{formatRelativeTime(ticket.created_at)}</p>
+                      <p className="text-xs text-muted-foreground">{formatRelativeTime(ticket.createdAt)}</p>
                     </div>
                     <div className="flex items-center gap-2 ml-3 shrink-0">
                       <TicketPriorityBadge priority={ticket.priority} />

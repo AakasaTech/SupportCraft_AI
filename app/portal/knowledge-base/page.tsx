@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { BookOpen, Search, ArrowRight, FolderOpen } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 
 export const metadata: Metadata = { title: "Knowledge Base" };
@@ -12,8 +14,7 @@ export default async function PortalKnowledgeBasePage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");
@@ -23,21 +24,26 @@ export default async function PortalKnowledgeBasePage({
   const query  = q?.trim() ?? "";
 
   const orgIds = [...new Set(customers.map((c) => c.org_id))];
-  const admin  = createAdminClient();
 
-  let articlesQuery = admin
-    .from("knowledge_articles")
-    .select("id, title, category, updated_at")
-    .in("org_id", orgIds)
-    .eq("status", "published")
-    .order("updated_at", { ascending: false });
+  const where: Prisma.KnowledgeArticleWhereInput = {
+    organizationId: { in: orgIds },
+    status: "published",
+    ...(query
+      ? {
+          OR: [
+            { title:   { contains: query, mode: "insensitive" } },
+            { content: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
 
-  if (query) {
-    articlesQuery = articlesQuery.or(`title.ilike.%${query}%,content.ilike.%${query}%`);
-  }
-
-  const { data: articles } = await articlesQuery.limit(100);
-  const allArticles = articles ?? [];
+  const allArticles = await prisma.knowledgeArticle.findMany({
+    where,
+    select: { id: true, title: true, category: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+    take: 100,
+  });
 
   // Group by category
   const grouped = new Map<string, typeof allArticles>();
@@ -109,7 +115,7 @@ export default async function PortalKnowledgeBasePage({
                     {article.title}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Updated {new Date(article.updated_at).toLocaleDateString()}
+                    Updated {new Date(article.updatedAt).toLocaleDateString()}
                   </p>
                 </div>
                 <ArrowRight size={14} className="text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />

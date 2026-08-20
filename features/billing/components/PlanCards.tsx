@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, AlertCircle } from "lucide-react";
 import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 import { PRICING_PLANS, type PricingPlan } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 
 // Map DB plan values to display plan IDs for "Current plan" highlighting
 const DB_TO_PRICING_ID: Record<OrgPlan, string> = {

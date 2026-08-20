@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { useSession, signOut } from "next-auth/react";
 import {
   LayoutDashboard, Ticket, BookOpen, Megaphone,
   User, LogOut, Menu, X, ChevronDown,
@@ -20,27 +20,16 @@ const NAV_LINKS = [
 export function PortalHeader() {
   const pathname = usePathname();
   const router   = useRouter();
+  const { data: session } = useSession();
 
-  const [email,       setEmail]       = useState<string | null>(null);
   const [userOpen,    setUserOpen]    = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
 
   const isLoginPage = pathname === "/portal/login";
-
-  useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    );
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
-  }, []);
+  const email = session?.user?.email ?? null;
 
   const handleSignOut = async () => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    );
-    await supabase.auth.signOut();
+    await signOut({ redirect: false });
     router.push("/portal/login");
   };
 

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Megaphone, Pin, Info, AlertTriangle, Wrench, Sparkles } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 import { cn } from "@/lib/utils";
 
@@ -15,27 +16,25 @@ const TYPE_CONFIG = {
 } as const;
 
 export default async function PortalAnnouncementsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");
   if (customers.length === 0) redirect("/portal/dashboard");
 
   const orgIds = [...new Set(customers.map((c) => c.org_id))];
-  const admin  = createAdminClient();
 
-  const { data: announcements } = await admin
-    .from("announcements")
-    .select("id, title, content, type, is_pinned, published_at")
-    .in("org_id", orgIds)
-    .not("published_at", "is", null)
-    .lte("published_at", new Date().toISOString())
-    .order("is_pinned", { ascending: false })
-    .order("published_at", { ascending: false })
-    .limit(50);
+  const announcements = await prisma.announcement.findMany({
+    where: { organizationId: { in: orgIds }, publishedAt: { not: null, lte: new Date() } },
+    select: { id: true, title: true, content: true, type: true, isPinned: true, publishedAt: true },
+    orderBy: [{ isPinned: "desc" }, { publishedAt: "desc" }],
+    take: 50,
+  });
 
-  const items = announcements ?? [];
+  const items = announcements.map((a) => ({
+    id: a.id, title: a.title, content: a.content, type: a.type,
+    is_pinned: a.isPinned, published_at: a.publishedAt,
+  }));
 
   return (
     <div className="space-y-6">

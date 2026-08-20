@@ -1,36 +1,27 @@
 import type { Metadata } from "next";
-import { redirect }      from "next/navigation";
 import Link              from "next/link";
 import {
   ArrowLeft, Eye, ThumbsUp, ThumbsDown, BookOpen, TrendingUp, Star,
 } from "lucide-react";
-import { createClient }  from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma }      from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "KB Analytics" };
 
 export default async function KBAnalyticsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) redirect("/login");
+  const articleRows = await prisma.knowledgeArticle.findMany({
+    where:   { organizationId: user.profile.organizationId },
+    select:  { id: true, title: true, status: true, viewsCount: true, helpfulVotes: true, notHelpfulVotes: true, readingTimeMin: true, updatedAt: true },
+    orderBy: { viewsCount: "desc" },
+  });
 
-  const { data: articles } = await supabase
-    .from("knowledge_articles")
-    .select("id, title, status, views_count, helpful_votes, not_helpful_votes, reading_time_min, updated_at")
-    .eq("org_id", profile.org_id)
-    .order("views_count", { ascending: false });
-
-  const { data: feedback } = await supabase
-    .from("article_feedback")
-    .select("article_id, is_helpful, created_at")
-    .in("article_id", (articles ?? []).map((a) => a.id))
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  const all = articles ?? [];
+  const all = articleRows.map((a) => ({
+    id: a.id, title: a.title, status: a.status, views_count: a.viewsCount,
+    helpful_votes: a.helpfulVotes, not_helpful_votes: a.notHelpfulVotes,
+    reading_time_min: a.readingTimeMin, updated_at: a.updatedAt,
+  }));
   const pub = all.filter((a) => a.status === "published");
 
   const totalViews    = all.reduce((s, a) => s + (a.views_count ?? 0), 0);

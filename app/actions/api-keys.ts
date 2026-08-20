@@ -1,72 +1,58 @@
-'use server'
+"use server";
 
-import { randomBytes, createHash } from 'node:crypto'
-import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { randomBytes, createHash } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 
-type Result<T = Record<string, never>> = { data?: T; error?: string }
+type Result<T = Record<string, never>> = { data?: T; error?: string };
 
 async function getCtx() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const user = await getCurrentUser();
+  if (!user) return null;
+  if (!["owner", "admin"].includes(user.profile.role)) return null;
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('org_id, role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.org_id) return null
-  if (!['owner', 'admin'].includes(profile.role)) return null
-
-  return { supabase, userId: user.id, orgId: profile.org_id }
+  return { userId: user.id, profileId: user.profile.id, orgId: user.profile.organizationId };
 }
 
 export async function generateApiKeyAction(
   name: string,
 ): Promise<Result<{ id: string; key: string; prefix: string }>> {
-  if (!name?.trim()) return { error: 'Name is required' }
+  if (!name?.trim()) return { error: "Name is required" };
 
-  const ctx = await getCtx()
-  if (!ctx) return { error: 'Unauthorized' }
+  const ctx = await getCtx();
+  if (!ctx) return { error: "Unauthorized" };
 
   // sc_live_ + 32 random hex chars = 40 chars total
-  const random = randomBytes(16).toString('hex')  // 32 hex
-  const key    = `sc_live_${random}`              // full key shown once
-  const prefix = `${key.slice(0, 16)}…`           // "sc_live_AbCd1234…" for display
-  const hash   = createHash('sha256').update(key).digest('hex')
+  const random = randomBytes(16).toString("hex"); // 32 hex
+  const key    = `sc_live_${random}`;             // full key shown once
+  const prefix = `${key.slice(0, 16)}…`;           // "sc_live_AbCd1234…" for display
+  const hash   = createHash("sha256").update(key).digest("hex");
 
-  const { data, error } = await ctx.supabase
-    .from('api_keys')
-    .insert({
-      organization_id: ctx.orgId,
-      created_by:      ctx.userId,
-      name:            name.trim(),
-      key_prefix:      prefix,
-      key_hash:        hash,
-    })
-    .select('id')
-    .single()
+  const created = await prisma.apiKey.create({
+    data: {
+      organizationId: ctx.orgId,
+      createdById:    ctx.profileId,
+      name:           name.trim(),
+      keyPrefix:      prefix,
+      keyHash:        hash,
+    },
+    select: { id: true },
+  });
 
-  if (error) return { error: error.message }
-
-  revalidatePath('/settings/api')
-  return { data: { id: data.id, key, prefix } }
+  revalidatePath("/settings/api");
+  return { data: { id: created.id, key, prefix } };
 }
 
 export async function revokeApiKeyAction(keyId: string): Promise<Result> {
-  const ctx = await getCtx()
-  if (!ctx) return { error: 'Unauthorized' }
+  const ctx = await getCtx();
+  if (!ctx) return { error: "Unauthorized" };
 
-  const { error } = await ctx.supabase
-    .from('api_keys')
-    .update({ revoked_at: new Date().toISOString() })
-    .eq('id', keyId)
-    .eq('organization_id', ctx.orgId) // scoped to org
+  await prisma.apiKey.updateMany({
+    where: { id: keyId, organizationId: ctx.orgId },
+    data:  { revokedAt: new Date() },
+  });
 
-  if (error) return { error: error.message }
-
-  revalidatePath('/settings/api')
-  return { data: {} }
+  revalidatePath("/settings/api");
+  return { data: {} };
 }

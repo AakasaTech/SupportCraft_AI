@@ -1,38 +1,24 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { generateCompletion } from "@/lib/ai";
 import { checkAIAccess } from "@/lib/ai/usage";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("org_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) {
-    return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-  }
-
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("plan, freepass_plan, freepass_until")
-    .eq("id", profile.org_id)
-    .single();
-
-  if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
-
   const { resolveEffectivePlan } = await import("@/lib/plans");
-  const effectivePlan = resolveEffectivePlan({ plan: org.plan as import("@/types/database").OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const effectivePlan = resolveEffectivePlan({
+    plan: user.organization.plan,
+    freepass_plan: user.organization.freepassPlan,
+    freepass_until: user.organization.freepassUntil?.toISOString() ?? null,
+  });
 
-  const { allowed, reason } = await checkAIAccess(profile.org_id, effectivePlan, "ai_auto_categorize");
+  const { allowed, reason } = await checkAIAccess(user.profile.organizationId, effectivePlan, "ai_auto_categorize");
   if (!allowed) {
     return NextResponse.json({ error: reason }, { status: 429 });
   }
@@ -40,12 +26,10 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { ticketId } = body;
 
-  const { data: ticket } = await supabase
-    .from("tickets")
-    .select("title, description")
-    .eq("id", ticketId)
-    .eq("org_id", profile.org_id)
-    .single();
+  const ticket = await prisma.ticket.findFirst({
+    where:  { id: ticketId, organizationId: user.profile.organizationId },
+    select: { title: true, description: true },
+  });
 
   if (!ticket) {
     return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
@@ -73,18 +57,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
   }
 
-  await supabase.from("tickets").update({
-    priority: classification.priority,
-    category: classification.category,
-    tags: classification.tags,
-    updated_at: new Date().toISOString(),
-  }).eq("id", ticketId);
+  await prisma.ticket.update({
+    where: { id: ticketId },
+    data: {
+      priority: classification.priority,
+      category: classification.category,
+      tags: classification.tags,
+    },
+  });
 
-  await supabase.from("ai_usage_logs").insert({
-    org_id: profile.org_id,
-    feature: "categorize",
-    provider: process.env.AI_PROVIDER ?? "openai",
-    tokens_used: tokensUsed,
+  await prisma.aiUsageLog.create({
+    data: {
+      organizationId: user.profile.organizationId,
+      feature: "categorize",
+      provider: process.env.AI_PROVIDER ?? "openai",
+      tokensUsed,
+    },
   });
 
   return NextResponse.json({ classification });

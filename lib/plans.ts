@@ -1,4 +1,4 @@
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 
 // ─── Free pass resolution ─────────────────────────────────────────────────────
 

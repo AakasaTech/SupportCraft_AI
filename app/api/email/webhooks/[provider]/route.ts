@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import type { EmailDeliveryEventType, Prisma } from "@/lib/generated/prisma/client";
 
 export const runtime = "nodejs";
 
@@ -11,16 +12,15 @@ export async function POST(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   const { provider } = await params;
-  const admin = createAdminClient();
 
   try {
     const body = await req.json();
 
     switch (provider) {
-      case "sendgrid":   await handleSendGrid(body, admin);   break;
-      case "mailgun":    await handleMailgun(body, admin);    break;
-      case "postmark":   await handlePostmark(body, admin);   break;
-      case "ses":        await handleSES(body, admin);        break;
+      case "sendgrid":   await handleSendGrid(body);   break;
+      case "mailgun":    await handleMailgun(body);    break;
+      case "postmark":   await handlePostmark(body);   break;
+      case "ses":        await handleSES(body);        break;
       default:
         return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
     }
@@ -34,26 +34,22 @@ export async function POST(
 
 async function recordEvent(
   messageId: string,
-  eventType: string,
+  eventType: EmailDeliveryEventType,
   data:      Record<string, unknown>,
-  admin:     ReturnType<typeof createAdminClient>
 ) {
-  const { data: msg } = await admin
-    .from("email_messages")
-    .select("id")
-    .eq("provider_message_id", messageId)
-    .single();
+  const msg = await prisma.emailMessage.findFirst({
+    where:  { providerMessageId: messageId },
+    select: { id: true },
+  });
 
   if (!msg) return;
 
-  await admin.from("email_delivery_events").insert({
-    email_message_id: msg.id,
-    event_type:       eventType,
-    provider_data:    data,
+  await prisma.emailDeliveryEvent.create({
+    data: { emailMessageId: msg.id, eventType, providerData: data as Prisma.InputJsonValue },
   });
 
   // Update message status for terminal events
-  const statusMap: Record<string, string> = {
+  const statusMap: Partial<Record<EmailDeliveryEventType, "delivered" | "bounced" | "rejected">> = {
     delivered: "delivered",
     bounced:   "bounced",
     rejected:  "rejected",
@@ -61,31 +57,29 @@ async function recordEvent(
   };
   const newStatus = statusMap[eventType];
   if (newStatus) {
-    await admin
-      .from("email_messages")
-      .update({ status: newStatus })
-      .eq("id", msg.id);
+    await prisma.emailMessage.update({
+      where: { id: msg.id },
+      data:  { status: newStatus },
+    });
 
     // Bounce: update customer email_status
     if (eventType === "bounced") {
-      const { data: emailMsg } = await admin
-        .from("email_messages")
-        .select("to_address, org_id")
-        .eq("id", msg.id)
-        .single();
+      const emailMsg = await prisma.emailMessage.findUnique({
+        where:  { id: msg.id },
+        select: { toAddress: true, organizationId: true },
+      });
       if (emailMsg) {
-        await admin
-          .from("customers")
-          .update({ email_status: "bounced", email_bounced_at: new Date().toISOString() })
-          .eq("org_id", emailMsg.org_id)
-          .eq("email", emailMsg.to_address);
+        await prisma.customer.updateMany({
+          where: { organizationId: emailMsg.organizationId, email: emailMsg.toAddress },
+          data:  { emailStatus: "bounced", emailBouncedAt: new Date() },
+        });
       }
     }
   }
 }
 
-async function handleSendGrid(events: unknown[], admin: ReturnType<typeof createAdminClient>) {
-  const eventTypeMap: Record<string, string> = {
+async function handleSendGrid(events: unknown[]) {
+  const eventTypeMap: Record<string, EmailDeliveryEventType> = {
     delivered: "delivered", open: "opened", click: "clicked",
     bounce: "bounced", blocked: "rejected", spamreport: "complained",
     deferred: "deferred",
@@ -94,15 +88,15 @@ async function handleSendGrid(events: unknown[], admin: ReturnType<typeof create
     const e = ev as Record<string, unknown>;
     const eventType = eventTypeMap[e.event as string];
     if (eventType && e["smtp-id"]) {
-      await recordEvent(e["smtp-id"] as string, eventType, e, admin);
+      await recordEvent(e["smtp-id"] as string, eventType, e);
     }
   }
 }
 
-async function handleMailgun(body: Record<string, unknown>, admin: ReturnType<typeof createAdminClient>) {
+async function handleMailgun(body: Record<string, unknown>) {
   const ev = body["event-data"] as Record<string, unknown> | undefined;
   if (!ev) return;
-  const eventTypeMap: Record<string, string> = {
+  const eventTypeMap: Record<string, EmailDeliveryEventType> = {
     delivered: "delivered", opened: "opened", clicked: "clicked",
     "permanent_fail": "bounced", rejected: "rejected", complained: "complained",
   };
@@ -111,12 +105,12 @@ async function handleMailgun(body: Record<string, unknown>, admin: ReturnType<ty
   const messageId = hdrs?.["message-id"] as string | undefined;
   const eventType = eventTypeMap[ev.event as string];
   if (messageId && eventType) {
-    await recordEvent(messageId, eventType, ev, admin);
+    await recordEvent(messageId, eventType, ev);
   }
 }
 
-async function handlePostmark(body: Record<string, unknown>, admin: ReturnType<typeof createAdminClient>) {
-  const eventTypeMap: Record<string, string> = {
+async function handlePostmark(body: Record<string, unknown>) {
+  const eventTypeMap: Record<string, EmailDeliveryEventType> = {
     Delivery: "delivered", Open: "opened", Click: "clicked",
     Bounce: "bounced", SpamComplaint: "complained",
   };
@@ -124,20 +118,20 @@ async function handlePostmark(body: Record<string, unknown>, admin: ReturnType<t
   const messageId  = body.MessageID as string;
   const eventType  = eventTypeMap[recordType];
   if (messageId && eventType) {
-    await recordEvent(messageId, eventType, body, admin);
+    await recordEvent(messageId, eventType, body);
   }
 }
 
-async function handleSES(body: Record<string, unknown>, admin: ReturnType<typeof createAdminClient>) {
+async function handleSES(body: Record<string, unknown>) {
   // SNS notification wrapper
   const message = typeof body.Message === "string" ? JSON.parse(body.Message) : body;
   const notif   = message.notificationType ?? message.eventType;
-  const eventTypeMap: Record<string, string> = {
+  const eventTypeMap: Record<string, EmailDeliveryEventType> = {
     Delivery: "delivered", Bounce: "bounced", Complaint: "complained",
   };
   const eventType = eventTypeMap[notif];
   const mail      = message.mail as Record<string, unknown>;
   if (mail?.messageId && eventType) {
-    await recordEvent(mail.messageId as string, eventType, message, admin);
+    await recordEvent(mail.messageId as string, eventType, message);
   }
 }

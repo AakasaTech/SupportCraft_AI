@@ -1,6 +1,5 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { resolveEffectivePlan } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
 import type { TicketContext } from "./types";
 
 export async function buildTicketContext(
@@ -8,55 +7,44 @@ export async function buildTicketContext(
   orgId:    string,
   opts: { kbLimit?: number; messageLimit?: number } = {}
 ): Promise<TicketContext | null> {
-  const admin      = createAdminClient();
-  const kbLimit    = opts.kbLimit    ?? 5;
-  const msgLimit   = opts.messageLimit ?? 20;
+  const kbLimit  = opts.kbLimit    ?? 5;
+  const msgLimit = opts.messageLimit ?? 20;
 
-  const [
-    { data: ticket },
-    { data: org },
-    { data: messages },
-    { data: articles },
-  ] = await Promise.all([
-    admin
-      .from("tickets")
-      .select("id, title, description, status, priority, category, tags, sentiment")
-      .eq("id", ticketId)
-      .eq("org_id", orgId)
-      .single(),
+  const [ticket, org, messages, articles] = await Promise.all([
+    prisma.ticket.findFirst({
+      where:  { id: ticketId, organizationId: orgId },
+      select: { id: true, title: true, description: true, status: true, priority: true, category: true, tags: true, sentiment: true },
+    }),
 
-    admin
-      .from("organizations")
-      .select("id, name, plan, freepass_plan, freepass_until")
-      .eq("id", orgId)
-      .single(),
+    prisma.organization.findUnique({
+      where:  { id: orgId },
+      select: { id: true, name: true, plan: true, freepassPlan: true, freepassUntil: true },
+    }),
 
-    admin
-      .from("ticket_messages")
-      .select("content, is_customer, is_ai, is_internal")
-      .eq("ticket_id", ticketId)
-      .eq("is_internal", false)
-      .order("created_at", { ascending: true })
-      .limit(msgLimit),
+    prisma.ticketMessage.findMany({
+      where:   { ticketId, isInternal: false },
+      select:  { content: true, isCustomer: true, isAi: true },
+      orderBy: { createdAt: "asc" },
+      take:    msgLimit,
+    }),
 
-    admin
-      .from("knowledge_articles")
-      .select("title, content")
-      .eq("org_id", orgId)
-      .eq("status", "published")
-      .limit(kbLimit),
+    prisma.knowledgeArticle.findMany({
+      where:  { organizationId: orgId, status: "published" },
+      select: { title: true, content: true },
+      take:   kbLimit,
+    }),
   ]);
 
   if (!ticket || !org) return null;
 
-  const conversation = (messages ?? []).map((m) => ({
-    role:    m.is_customer ? "customer" as const
-           : m.is_ai       ? "ai"       as const
-           :                 "agent"    as const,
+  const conversation = messages.map((m) => ({
+    role:    m.isCustomer ? "customer" as const
+           : m.isAi       ? "ai"       as const
+           :                "agent"    as const,
     content: m.content,
   }));
 
-  const kbArticles = (articles ?? []).map((a) => ({
+  const kbArticles = articles.map((a) => ({
     title:   a.title,
     content: a.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 600),
   }));
@@ -74,6 +62,13 @@ export async function buildTicketContext(
     },
     conversation,
     kbArticles,
-    org: { id: org.id, name: org.name, plan: resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null }) },
+    org: {
+      id: org.id, name: org.name,
+      plan: resolveEffectivePlan({
+        plan: org.plan,
+        freepass_plan: org.freepassPlan,
+        freepass_until: org.freepassUntil?.toISOString() ?? null,
+      }),
+    },
   };
 }

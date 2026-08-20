@@ -1,5 +1,5 @@
 import { NextResponse }        from "next/server";
-import { createClient }        from "@/lib/supabase/server";
+import { getCurrentUser }      from "@/lib/auth/helpers";
 import { improveText }         from "@/lib/ai/services/improve";
 import { checkAIAccess }       from "@/lib/ai/usage";
 import type { ImprovementAction } from "@/lib/ai/types";
@@ -7,22 +7,17 @@ import type { ImprovementAction } from "@/lib/ai/types";
 const VALID_ACTIONS: ImprovementAction[] = ["improve", "shorten", "expand", "formalize", "simplify", "translate"];
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-
-  const { data: org } = await supabase
-    .from("organizations").select("plan, freepass_plan, freepass_until").eq("id", profile.org_id).single();
-  if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
-
   const { resolveEffectivePlan } = await import("@/lib/plans");
-  const effectivePlan = resolveEffectivePlan({ plan: org.plan as import("@/types/database").OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const effectivePlan = resolveEffectivePlan({
+    plan: user.organization.plan,
+    freepass_plan: user.organization.freepassPlan,
+    freepass_until: user.organization.freepassUntil?.toISOString() ?? null,
+  });
 
-  const { allowed, reason } = await checkAIAccess(profile.org_id, effectivePlan, "ai_improve");
+  const { allowed, reason } = await checkAIAccess(user.profile.organizationId, effectivePlan, "ai_improve");
   if (!allowed) {
     return NextResponse.json({ error: reason }, { status: 429 });
   }
@@ -38,7 +33,7 @@ export async function POST(request: Request) {
     : "improve";
 
   try {
-    const improved = await improveText(text, resolvedAction, profile.org_id, user.id);
+    const improved = await improveText(text, resolvedAction, user.profile.organizationId, user.id);
     return NextResponse.json({ text: improved });
   } catch (err) {
     return NextResponse.json(

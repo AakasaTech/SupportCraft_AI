@@ -1,8 +1,7 @@
 import { Sparkles, Building2, CalendarDays, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, getPlanLimits } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
 
 interface Props {
   orgId:  string;
@@ -26,29 +25,22 @@ function getDateLabel(): string {
 }
 
 export async function WelcomeBanner({ orgId, userId }: Props) {
-  const supabase = await createClient();
+  const todayStart = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+  const monthStart = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })();
 
-  const todayStart  = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); })();
-  const monthStart  = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString(); })();
-
-  const [
-    { data: profile },
-    { data: org },
-    { count: aiToday },
-    { count: aiMonth },
-  ] = await Promise.all([
-    supabase.from("profiles").select("full_name").eq("id", userId).single(),
-    supabase.from("organizations").select("name, plan").eq("id", orgId).single(),
-    supabase.from("ai_usage_logs").select("*", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", todayStart),
-    supabase.from("ai_usage_logs").select("*", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", monthStart),
+  const [profile, org, aiToday, aiMonth] = await Promise.all([
+    prisma.profile.findUnique({ where: { id: userId }, select: { fullName: true } }),
+    prisma.organization.findUnique({ where: { id: orgId }, select: { name: true, plan: true } }),
+    prisma.aiUsageLog.count({ where: { organizationId: orgId, createdAt: { gte: todayStart } } }),
+    prisma.aiUsageLog.count({ where: { organizationId: orgId, createdAt: { gte: monthStart } } }),
   ]);
 
-  const firstName = (profile?.full_name ?? "there").split(" ")[0];
+  const firstName = (profile?.fullName ?? "there").split(" ")[0];
   const orgName   = org?.name ?? "Your Organization";
-  const plan      = (org?.plan ?? "free") as OrgPlan;
+  const plan      = org?.plan ?? "free";
   const aiMonthLimit = getPlanLimits(plan).monthlyAICalls;
-  const aiUsedToday  = aiToday  ?? 0;
-  const aiUsedMonth  = aiMonth  ?? 0;
+  const aiUsedToday  = aiToday;
+  const aiUsedMonth  = aiMonth;
 
   const pct = aiMonthLimit === Infinity ? 0 : Math.min(100, Math.round((aiUsedMonth / aiMonthLimit) * 100));
   const low = pct >= 80;

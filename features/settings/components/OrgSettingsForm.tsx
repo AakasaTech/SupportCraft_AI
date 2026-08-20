@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { updateOrgSchema, type UpdateOrgInput } from "../schemas";
-import { createClient } from "@/lib/supabase/client";
+import { updateOrganization } from "../actions/organization";
 import { useRouter } from "next/navigation";
-import type { Organization } from "@/types/database";
+import type { Organization } from "@/lib/generated/prisma/client";
 
 const TIMEZONES = [
   "UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
@@ -38,7 +38,7 @@ export function OrgSettingsForm({ org, isAdmin, derivedSupportEmail }: OrgSettin
     defaultValues: {
       name: org.name,
       website: org.website ?? "",
-      support_email: org.support_email ?? "",
+      support_email: org.supportEmail ?? "",
       country: org.country ?? "",
       timezone: org.timezone ?? "UTC",
     },
@@ -47,19 +47,10 @@ export function OrgSettingsForm({ org, isAdmin, derivedSupportEmail }: OrgSettin
   function onSubmit(data: UpdateOrgInput) {
     setMessage(null);
     startTransition(async () => {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("organizations")
-        .update({
-          name: data.name,
-          website: data.website || null,
-          country: data.country || null,
-          timezone: data.timezone || "UTC",
-        })
-        .eq("id", org.id);
+      const result = await updateOrganization(data);
 
-      if (error) {
-        setMessage({ type: "error", text: error.message });
+      if (result.error) {
+        setMessage({ type: "error", text: result.error });
       } else {
         setMessage({ type: "success", text: "Organization settings updated" });
         router.refresh();

@@ -1,42 +1,34 @@
-import { NextResponse }      from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
-import { createClient }      from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { query, limit = 10 } = await request.json() as { query: string; limit?: number };
   if (!query?.trim()) return NextResponse.json({ articles: [] });
 
-  const admin = createAdminClient();
+  const trimmed = query.trim();
 
-  // Full-text search using the generated `fts` column, fall back to ilike
-  const { data: ftsResults } = await admin
-    .from("knowledge_articles")
-    .select("id, title, excerpt, category, tags, reading_time_min, views_count")
-    .eq("org_id", profile.org_id)
-    .eq("status", "published")
-    .textSearch("fts", query.trim().split(/\s+/).join(" & "), { type: "plain" })
-    .limit(limit);
+  const articles = await prisma.knowledgeArticle.findMany({
+    where: {
+      organizationId: user.profile.organizationId,
+      status: "published",
+      OR: [
+        { title:   { contains: trimmed, mode: "insensitive" } },
+        { excerpt: { contains: trimmed, mode: "insensitive" } },
+        { content: { contains: trimmed, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true, title: true, excerpt: true, category: true, tags: true, readingTimeMin: true, viewsCount: true },
+    take: limit,
+  });
 
-  if (ftsResults && ftsResults.length > 0) {
-    return NextResponse.json({ articles: ftsResults, source: "fts" });
-  }
-
-  // Fallback: ilike search
-  const { data: ilikeResults } = await admin
-    .from("knowledge_articles")
-    .select("id, title, excerpt, category, tags, reading_time_min, views_count")
-    .eq("org_id", profile.org_id)
-    .eq("status", "published")
-    .or(`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`)
-    .limit(limit);
-
-  return NextResponse.json({ articles: ilikeResults ?? [], source: "ilike" });
+  return NextResponse.json({
+    articles: articles.map((a) => ({
+      id: a.id, title: a.title, excerpt: a.excerpt, category: a.category, tags: a.tags,
+      reading_time_min: a.readingTimeMin, views_count: a.viewsCount,
+    })),
+  });
 }

@@ -7,7 +7,7 @@ export interface ForwardResult {
   error?:   string;
 }
 
-export async function forwardToSupabase(
+export async function forwardToApp(
   payload:  InboundEmailPayload,
   url:      string,
   secret:   string
@@ -31,6 +31,6 @@ export async function forwardToSupabase(
     return { ok: false, status: response.status, error: text };
   }
 
-  const json = await response.json().catch(() => ({})) as { ticket_id?: string };
-  return { ok: true, status: response.status, ticketId: json.ticket_id };
+  const json = await response.json().catch(() => ({})) as { ticketId?: string };
+  return { ok: true, status: response.status, ticketId: json.ticketId };
 }

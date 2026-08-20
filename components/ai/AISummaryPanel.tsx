@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { AIBadge } from "./AIBadge";
 import { cn } from "@/lib/utils";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 
 interface AISummaryPanelProps {
   summary: string;

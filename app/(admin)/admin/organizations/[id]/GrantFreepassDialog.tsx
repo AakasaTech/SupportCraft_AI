@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { grantFreepassAction } from "@/app/actions/admin";
 import { PLAN_NAMES } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 import { BadgeCheck, X } from "lucide-react";
 
 const PLANS: OrgPlan[] = ["pro", "business"];

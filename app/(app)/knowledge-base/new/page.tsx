@@ -1,27 +1,20 @@
 import type { Metadata }  from "next";
-import { redirect }       from "next/navigation";
 import Link               from "next/link";
 import { ArrowLeft }      from "lucide-react";
-import { createClient }   from "@/lib/supabase/server";
+import { requireAuth }    from "@/lib/auth/helpers";
+import { prisma }         from "@/lib/prisma";
 import { ArticleEditor }  from "@/features/knowledge-base/components/ArticleEditor";
 
 export const metadata: Metadata = { title: "New Article" };
 
 export default async function NewArticlePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) redirect("/login");
-
-  const { data: categories } = await supabase
-    .from("kb_categories")
-    .select("id, name, icon")
-    .eq("org_id", profile.org_id)
-    .eq("is_archived", false)
-    .order("sort_order");
+  const categories = await prisma.kbCategory.findMany({
+    where:   { organizationId: user.profile.organizationId, isArchived: false },
+    select:  { id: true, name: true, icon: true },
+    orderBy: { sortOrder: "asc" },
+  });
 
   return (
     <div className="p-6 space-y-4">
@@ -34,8 +27,8 @@ export default async function NewArticlePage() {
       </Link>
 
       <ArticleEditor
-        categories={categories ?? []}
-        orgId={profile.org_id}
+        categories={categories}
+        orgId={user.profile.organizationId}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { downloadFile } from "@/lib/storage";
 
@@ -11,24 +11,18 @@ export async function GET(
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const admin = createAdminClient();
-
-  // Fetch attachment record (org-scoped) — still read from the Supabase
-  // Postgres this table's writes go to; see attachment-processor.ts.
-  const { data: att } = await admin
-    .from("email_attachments")
-    .select("storage_path, filename, content_type, org_id")
-    .eq("id", id)
-    .eq("org_id", user.profile.organizationId)
-    .single();
+  const att = await prisma.emailAttachment.findFirst({
+    where:  { id, organizationId: user.profile.organizationId },
+    select: { storagePath: true, filename: true, contentType: true },
+  });
 
   if (!att) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   try {
-    const { buffer } = await downloadFile(att.storage_path);
+    const { buffer } = await downloadFile(att.storagePath);
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        "Content-Type":        att.content_type,
+        "Content-Type":        att.contentType,
         "Content-Disposition": `attachment; filename="${encodeURIComponent(att.filename)}"`,
       },
     });

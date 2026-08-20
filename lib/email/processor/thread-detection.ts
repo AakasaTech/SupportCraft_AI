@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
 export interface ThreadDetectionResult {
   ticketId:   string | null;
@@ -22,30 +22,24 @@ export async function detectThread(params: {
   bodyHtml:    string | null;
   bodyPlain:   string | null;
 }): Promise<ThreadDetectionResult> {
-  const admin = createAdminClient();
-
   // ── 1. Hidden token in body ───────────────────────────────────────────────
   const bodyToSearch = params.bodyHtml ?? params.bodyPlain ?? "";
   const hiddenMatch  = HIDDEN_TOKEN_RE.exec(bodyToSearch);
   if (hiddenMatch) {
-    const { data: ticket } = await admin
-      .from("tickets")
-      .select("id")
-      .eq("org_id", params.orgId)
-      .eq("id", hiddenMatch[1])
-      .single();
+    const ticket = await prisma.ticket.findFirst({
+      where:  { organizationId: params.orgId, id: hiddenMatch[1] },
+      select: { id: true },
+    });
     if (ticket) return { ticketId: ticket.id, isReply: true, confidence: "high", method: "hidden_token" };
   }
 
   // ── 2. Subject token — [Ticket #SUP-1003] or [SUP-1003] ────────────────
   const subjectMatch = TICKET_TOKEN_RE.exec(params.subject);
   if (subjectMatch) {
-    const { data: ticket } = await admin
-      .from("tickets")
-      .select("id")
-      .eq("org_id", params.orgId)
-      .eq("ticket_number", subjectMatch[1].toUpperCase())
-      .single();
+    const ticket = await prisma.ticket.findFirst({
+      where:  { organizationId: params.orgId, ticketNumber: subjectMatch[1].toUpperCase() },
+      select: { id: true },
+    });
     if (ticket) {
       return { ticketId: ticket.id, isReply: true, confidence: "high", method: "subject_token" };
     }
@@ -53,27 +47,23 @@ export async function detectThread(params: {
 
   // ── 3. In-Reply-To header → match email_messages.message_id ─────────────
   if (params.inReplyTo) {
-    const { data: msg } = await admin
-      .from("email_messages")
-      .select("ticket_id")
-      .eq("message_id", params.inReplyTo)
-      .eq("org_id", params.orgId)
-      .single();
-    if (msg?.ticket_id) {
-      return { ticketId: msg.ticket_id, isReply: true, confidence: "high", method: "in_reply_to" };
+    const msg = await prisma.emailMessage.findFirst({
+      where:  { messageId: params.inReplyTo, organizationId: params.orgId },
+      select: { ticketId: true },
+    });
+    if (msg?.ticketId) {
+      return { ticketId: msg.ticketId, isReply: true, confidence: "high", method: "in_reply_to" };
     }
   }
 
   // ── 4. References chain ──────────────────────────────────────────────────
   if (params.references.length > 0) {
-    const { data: msgs } = await admin
-      .from("email_messages")
-      .select("ticket_id")
-      .eq("org_id", params.orgId)
-      .in("message_id", params.references)
-      .limit(1);
-    if (msgs?.[0]?.ticket_id) {
-      return { ticketId: msgs[0].ticket_id, isReply: true, confidence: "high", method: "references" };
+    const msg = await prisma.emailMessage.findFirst({
+      where:  { organizationId: params.orgId, messageId: { in: params.references } },
+      select: { ticketId: true },
+    });
+    if (msg?.ticketId) {
+      return { ticketId: msg.ticketId, isReply: true, confidence: "high", method: "references" };
     }
   }
 

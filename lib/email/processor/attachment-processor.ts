@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { uploadFile } from "@/lib/storage";
 
 interface RawAttachment {
@@ -37,7 +37,6 @@ export async function processAttachments(params: {
   emailMessageId: string;
   attachments:    RawAttachment[];
 }): Promise<StoredAttachment[]> {
-  const admin   = createAdminClient();
   const results: StoredAttachment[] = [];
 
   for (const att of params.attachments) {
@@ -73,38 +72,30 @@ export async function processAttachments(params: {
       continue;
     }
 
-    // Record in DB — deliberately still the Supabase-hosted Postgres, not
-    // Prisma/Neon: the Ticket/EmailMessage rows this references are written
-    // by ticket-service.ts to that same database, so pointing this insert at
-    // Neon would violate the FK constraints (those parent rows don't exist
-    // there). Move together once the rest of the email pipeline migrates.
-    const { data: record } = await admin
-      .from("email_attachments")
-      .insert({
-        org_id:           params.orgId,
-        email_message_id: params.emailMessageId,
-        ticket_id:        params.ticketId,
-        filename:         safeFilename,
-        content_type:     normalizedType,
-        size_bytes:       att.size,
-        storage_path:     storagePath,
-        is_inline:        Boolean(att.contentId),
-        content_id:       att.contentId,
-      })
-      .select("id")
-      .single();
-
-    if (record) {
-      results.push({
-        id:          record.id,
-        filename:    safeFilename,
-        contentType: normalizedType,
-        sizeBytes:   att.size,
+    const record = await prisma.emailAttachment.create({
+      data: {
+        organizationId: params.orgId,
+        emailMessageId: params.emailMessageId,
+        ticketId:       params.ticketId,
+        filename:       safeFilename,
+        contentType:    normalizedType,
+        sizeBytes:      att.size,
         storagePath,
-        isInline:    Boolean(att.contentId),
-        contentId:   att.contentId,
-      });
-    }
+        isInline:       Boolean(att.contentId),
+        contentId:      att.contentId,
+      },
+      select: { id: true },
+    });
+
+    results.push({
+      id:          record.id,
+      filename:    safeFilename,
+      contentType: normalizedType,
+      sizeBytes:   att.size,
+      storagePath,
+      isInline:    Boolean(att.contentId),
+      contentId:   att.contentId,
+    });
   }
 
   return results;

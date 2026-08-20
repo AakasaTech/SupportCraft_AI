@@ -74,7 +74,7 @@ export default function PrivacyPage() {
             <h2>3. Data Sharing</h2>
             <p>We share your information only in these limited circumstances:</p>
             <ul className="list-disc pl-5 mt-2">
-              <li><strong className="text-foreground">Service providers</strong> — Supabase (database and auth), OpenAI or Anthropic (AI processing), PayPal (billing), and email delivery services. Each is bound by data processing agreements.</li>
+              <li><strong className="text-foreground">Service providers</strong> — Neon (database), OpenAI or Anthropic (AI processing), Cloudflare R2 (file storage), PayPal (billing), and email delivery services. Each is bound by data processing agreements.</li>
               <li><strong className="text-foreground">Legal requirements</strong> — when required by law, court order, or governmental authority.</li>
               <li><strong className="text-foreground">Business transfers</strong> — in connection with a merger, acquisition, or sale of assets, with appropriate confidentiality obligations.</li>
               <li><strong className="text-foreground">With your consent</strong> — for any other purpose you explicitly authorise.</li>

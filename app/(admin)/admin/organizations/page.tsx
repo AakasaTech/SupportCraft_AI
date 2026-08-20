@@ -1,21 +1,19 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, resolveEffectivePlan } from "@/lib/plans";
 import { BadgeCheck, ChevronRight } from "lucide-react";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 
 export default async function AdminOrganizationsPage() {
-  const supabase = createAdminClient();
-
-  const { data: orgs } = await supabase
-    .from("organizations")
-    .select("id, name, slug, plan, freepass_plan, freepass_until, created_at")
-    .order("created_at", { ascending: false });
+  const orgs = await prisma.organization.findMany({
+    select:  { id: true, name: true, slug: true, plan: true, freepassPlan: true, freepassUntil: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-1">Organizations</h1>
-      <p className="text-muted-foreground mb-6">{orgs?.length ?? 0} total</p>
+      <p className="text-muted-foreground mb-6">{orgs.length} total</p>
 
       <div className="rounded-xl border border-border overflow-hidden">
         <table className="w-full text-sm">
@@ -30,15 +28,15 @@ export default async function AdminOrganizationsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {(orgs ?? []).map((org) => {
+            {orgs.map((org) => {
               const effective = resolveEffectivePlan({
-                plan:           org.plan as OrgPlan,
-                freepass_plan:  org.freepass_plan,
-                freepass_until: org.freepass_until,
+                plan:           org.plan,
+                freepass_plan:  org.freepassPlan,
+                freepass_until: org.freepassUntil?.toISOString() ?? null,
               });
               const hasFreepass = effective !== org.plan;
-              const fpUntil = org.freepass_until
-                ? new Date(org.freepass_until).toLocaleDateString()
+              const fpUntil = org.freepassUntil
+                ? org.freepassUntil.toLocaleDateString()
                 : "Permanent";
 
               return (
@@ -54,14 +52,14 @@ export default async function AdminOrganizationsPage() {
                     {hasFreepass ? (
                       <span className="inline-flex items-center gap-1 text-amber-600 text-xs font-medium">
                         <BadgeCheck size={13} />
-                        {PLAN_NAMES[org.freepass_plan as OrgPlan]} · {fpUntil}
+                        {PLAN_NAMES[org.freepassPlan as OrgPlan]} · {fpUntil}
                       </span>
                     ) : (
                       <span className="text-muted-foreground text-xs">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {new Date(org.created_at).toLocaleDateString()}
+                    {org.createdAt.toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link

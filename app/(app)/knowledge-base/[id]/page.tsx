@@ -1,8 +1,9 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import type { Metadata }      from "next";
 import Link                   from "next/link";
 import { ArrowLeft }          from "lucide-react";
-import { createClient }       from "@/lib/supabase/server";
+import { requireAuth }        from "@/lib/auth/helpers";
+import { prisma }             from "@/lib/prisma";
 import { ArticleEditor }      from "@/features/knowledge-base/components/ArticleEditor";
 
 interface Props {
@@ -11,45 +12,47 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase.from("knowledge_articles").select("title").eq("id", id).single();
-  return { title: data?.title ?? "Article" };
+  const article = await prisma.knowledgeArticle.findUnique({ where: { id }, select: { title: true } });
+  return { title: article?.title ?? "Article" };
 }
 
 export default async function ArticleDetailPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const [articleRow, categories, versionRows] = await Promise.all([
+    // Scoped to this agent's org — Prisma has no RLS, so this check is what
+    // stops one org's agent from viewing another org's article by URL id.
+    prisma.knowledgeArticle.findFirst({
+      where:  { id, organizationId: orgId },
+      select: {
+        id: true, title: true, content: true, excerpt: true, status: true, visibility: true,
+        category: true, categoryId: true, tags: true, seoTitle: true, seoDescription: true,
+        coverImageUrl: true, version: true,
+      },
+    }),
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) redirect("/login");
+    prisma.kbCategory.findMany({
+      where:   { organizationId: orgId, isArchived: false },
+      select:  { id: true, name: true, icon: true },
+      orderBy: { sortOrder: "asc" },
+    }),
 
-  const [{ data: article }, { data: categories }, { data: versions }] = await Promise.all([
-    supabase
-      .from("knowledge_articles")
-      .select("id, title, content, excerpt, status, visibility, category, category_id, tags, seo_title, seo_description, cover_image_url, version")
-      .eq("id", id)
-      .single(),
-
-    supabase
-      .from("kb_categories")
-      .select("id, name, icon")
-      .eq("org_id", profile.org_id)
-      .eq("is_archived", false)
-      .order("sort_order"),
-
-    supabase
-      .from("article_versions")
-      .select("id, version_number, change_summary, created_at")
-      .eq("article_id", id)
-      .order("version_number", { ascending: false })
-      .limit(20),
+    prisma.articleVersion.findMany({
+      where:   { articleId: id },
+      select:  { id: true, versionNumber: true, changeSummary: true, createdAt: true },
+      orderBy: { versionNumber: "desc" },
+      take:    20,
+    }),
   ]);
 
-  if (!article) notFound();
+  if (!articleRow) notFound();
+
+  const versions = versionRows.map((v) => ({
+    id: v.id, version_number: v.versionNumber, change_summary: v.changeSummary,
+    created_at: v.createdAt.toISOString(),
+  }));
 
   return (
     <div className="p-6 space-y-4">
@@ -63,14 +66,15 @@ export default async function ArticleDetailPage({ params }: Props) {
 
       <ArticleEditor
         article={{
-          ...article,
-          tags:       article.tags ?? [],
-          visibility: article.visibility ?? "public",
-          version:    article.version ?? 1,
+          id: articleRow.id, title: articleRow.title, content: articleRow.content,
+          excerpt: articleRow.excerpt, status: articleRow.status, visibility: articleRow.visibility,
+          category: articleRow.category, category_id: articleRow.categoryId, tags: articleRow.tags,
+          seo_title: articleRow.seoTitle, seo_description: articleRow.seoDescription,
+          cover_image_url: articleRow.coverImageUrl, version: articleRow.version,
         }}
-        categories={categories ?? []}
-        versions={versions ?? []}
-        orgId={profile.org_id}
+        categories={categories}
+        versions={versions}
+        orgId={orgId}
       />
     </div>
   );

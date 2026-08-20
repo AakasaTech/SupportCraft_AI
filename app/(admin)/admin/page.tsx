@@ -1,45 +1,29 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { Building2, Users, Ticket, Zap } from "lucide-react";
 
 async function getStats() {
-  const supabase = createAdminClient();
-
-  const [
-    { count: orgCount },
-    { count: userCount },
-    { count: ticketCount },
-    { count: aiCount },
-  ] = await Promise.all([
-    supabase.from("organizations").select("*", { count: "exact", head: true }),
-    supabase.from("profiles").select("*", { count: "exact", head: true }),
-    supabase.from("tickets").select("*", { count: "exact", head: true }),
-    supabase.from("ai_usage_logs").select("*", { count: "exact", head: true }),
+  const [orgCount, userCount, ticketCount, aiCount, orgs] = await Promise.all([
+    prisma.organization.count(),
+    prisma.profile.count(),
+    prisma.ticket.count(),
+    prisma.aiUsageLog.count(),
+    prisma.organization.findMany({ select: { plan: true, freepassPlan: true, freepassUntil: true } }),
   ]);
 
   // Plan distribution
-  const { data: orgs } = await supabase
-    .from("organizations")
-    .select("plan, freepass_plan, freepass_until");
-
   const planCounts = { free: 0, pro: 0, business: 0, freepass: 0 };
-  for (const org of orgs ?? []) {
+  for (const org of orgs) {
     const hasFreepass =
-      org.freepass_plan &&
-      (!org.freepass_until || new Date(org.freepass_until) > new Date());
+      org.freepassPlan &&
+      (!org.freepassUntil || org.freepassUntil > new Date());
     if (hasFreepass) {
       planCounts.freepass++;
     } else {
-      planCounts[org.plan as keyof typeof planCounts]++;
+      planCounts[org.plan]++;
     }
   }
 
-  return {
-    orgCount:    orgCount    ?? 0,
-    userCount:   userCount   ?? 0,
-    ticketCount: ticketCount ?? 0,
-    aiCount:     aiCount     ?? 0,
-    planCounts,
-  };
+  return { orgCount, userCount, ticketCount, aiCount, planCounts };
 }
 
 export default async function AdminDashboardPage() {

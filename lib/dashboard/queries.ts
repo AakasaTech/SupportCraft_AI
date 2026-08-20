@@ -1,129 +1,116 @@
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
-function startOfToday(): string {
+function startOfToday(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  return d;
 }
 
-function startOfYesterday(): string {
+function startOfYesterday(): Date {
   const d = new Date();
   d.setDate(d.getDate() - 1);
   d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  return d;
 }
 
-function daysAgo(n: number): string {
-  return new Date(Date.now() - n * 864e5).toISOString();
+function daysAgo(n: number): Date {
+  return new Date(Date.now() - n * 864e5);
 }
 
-function startOfMonth(): string {
+function startOfMonth(): Date {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+  return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 // ─── KPI data ─────────────────────────────────────────────────────────────────
 
 export async function getKpiData(orgId: string, userId: string) {
-  const supabase = await createClient();
   const todayStart     = startOfToday();
   const yesterdayStart = startOfYesterday();
   const overdueThresh  = daysAgo(1);
   const monthStart     = startOfMonth();
 
   const [
-    { count: openTotal },
-    { count: openYesterday },
-    { count: myOpen },
-    { count: myHighPriority },
-    { count: pending },
-    { count: overdue },
-    { count: resolvedToday },
-    { count: resolvedYesterday },
-    { data: aiToday },
-    { data: aiMonth },
-    { data: resolvedRows },
-    { count: aiMsgToday },
+    openTotal,
+    openYesterday,
+    myOpen,
+    myHighPriority,
+    pending,
+    overdue,
+    resolvedToday,
+    resolvedYesterday,
+    aiToday,
+    aiMonth,
+    resolvedRows,
+    aiMsgToday,
   ] = await Promise.all([
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("status", "open"),
+    prisma.ticket.count({ where: { organizationId: orgId, status: "open" } }),
 
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("status", "open")
-      .lt("created_at", todayStart),
+    prisma.ticket.count({ where: { organizationId: orgId, status: "open", createdAt: { lt: todayStart } } }),
 
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("assignee_id", userId)
-      .in("status", ["open", "pending"]),
+    prisma.ticket.count({ where: { organizationId: orgId, assigneeId: userId, status: { in: ["open", "pending"] } } }),
 
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("assignee_id", userId)
-      .in("priority", ["high", "urgent"])
-      .in("status", ["open", "pending"]),
+    prisma.ticket.count({
+      where: { organizationId: orgId, assigneeId: userId, priority: { in: ["high", "urgent"] }, status: { in: ["open", "pending"] } },
+    }),
 
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("status", "pending"),
+    prisma.ticket.count({ where: { organizationId: orgId, status: "pending" } }),
 
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).in("status", ["open", "pending"])
-      .in("priority", ["high", "urgent"])
-      .lt("created_at", overdueThresh),
+    prisma.ticket.count({
+      where: { organizationId: orgId, status: { in: ["open", "pending"] }, priority: { in: ["high", "urgent"] }, createdAt: { lt: overdueThresh } },
+    }),
 
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("status", "resolved")
-      .gte("updated_at", todayStart),
+    prisma.ticket.count({ where: { organizationId: orgId, status: "resolved", updatedAt: { gte: todayStart } } }),
 
-    supabase.from("tickets").select("*", { count: "exact", head: true })
-      .eq("org_id", orgId).eq("status", "resolved")
-      .gte("updated_at", yesterdayStart).lt("updated_at", todayStart),
+    prisma.ticket.count({
+      where: { organizationId: orgId, status: "resolved", updatedAt: { gte: yesterdayStart, lt: todayStart } },
+    }),
 
-    supabase.from("ai_usage_logs").select("tokens_used")
-      .eq("org_id", orgId).gte("created_at", todayStart),
+    prisma.aiUsageLog.findMany({ where: { organizationId: orgId, createdAt: { gte: todayStart } }, select: { tokensUsed: true } }),
 
-    supabase.from("ai_usage_logs").select("tokens_used")
-      .eq("org_id", orgId).gte("created_at", monthStart),
+    prisma.aiUsageLog.findMany({ where: { organizationId: orgId, createdAt: { gte: monthStart } }, select: { tokensUsed: true } }),
 
     // For avg resolution hours
-    supabase.from("tickets").select("created_at, updated_at")
-      .eq("org_id", orgId).eq("status", "resolved")
-      .gte("updated_at", monthStart).limit(100),
+    prisma.ticket.findMany({
+      where: { organizationId: orgId, status: "resolved", updatedAt: { gte: monthStart } },
+      select: { createdAt: true, updatedAt: true },
+      take: 100,
+    }),
 
     // AI suggestions today (AI messages)
-    supabase.from("ticket_messages").select("*", { count: "exact", head: true })
-      .eq("is_ai", true)
-      .gte("created_at", todayStart),
+    prisma.ticketMessage.count({ where: { isAi: true, createdAt: { gte: todayStart } } }),
   ]);
 
-  const todayAiRequests = aiToday?.length ?? 0;
-  const todayTokens     = aiToday?.reduce((s, r) => s + (r.tokens_used ?? 0), 0) ?? 0;
-  const monthTokens     = aiMonth?.reduce((s, r) => s + (r.tokens_used ?? 0), 0) ?? 0;
+  const todayAiRequests = aiToday.length;
+  const todayTokens     = aiToday.reduce((s, r) => s + (r.tokensUsed ?? 0), 0);
+  const monthTokens     = aiMonth.reduce((s, r) => s + (r.tokensUsed ?? 0), 0);
 
-  const resolvedDelta = (resolvedToday ?? 0) - (resolvedYesterday ?? 0);
-  const openDelta     = (openTotal ?? 0) - (openYesterday ?? 0);
+  const resolvedDelta = resolvedToday - resolvedYesterday;
+  const openDelta     = openTotal - openYesterday;
 
   // Avg resolution time (hours)
   let avgResolutionHours = 0;
-  if (resolvedRows?.length) {
+  if (resolvedRows.length) {
     const total = resolvedRows.reduce((sum, t) => {
-      const ms = new Date(t.updated_at).getTime() - new Date(t.created_at).getTime();
+      const ms = t.updatedAt.getTime() - t.createdAt.getTime();
       return sum + Math.max(ms, 0);
     }, 0);
     avgResolutionHours = parseFloat((total / resolvedRows.length / 36e5).toFixed(1));
   }
 
-  const aiSuggestionCount = aiMsgToday ?? 0;
+  const aiSuggestionCount = aiMsgToday;
   const aiTimeSavedHours  = parseFloat((aiSuggestionCount * 0.3).toFixed(1));
 
   return {
-    openTotal:          openTotal ?? 0,
+    openTotal,
     openDelta,
-    myOpen:             myOpen ?? 0,
-    myHighPriority:     myHighPriority ?? 0,
-    pending:            pending ?? 0,
-    overdue:            overdue ?? 0,
-    resolvedToday:      resolvedToday ?? 0,
+    myOpen,
+    myHighPriority,
+    pending,
+    overdue,
+    resolvedToday,
     resolvedDelta,
     aiRequestsToday:    todayAiRequests,
     aiTokensToday:      todayTokens,
@@ -131,7 +118,7 @@ export async function getKpiData(orgId: string, userId: string) {
     avgResolutionHours,
     aiSuggestionCount,
     aiTimeSavedHours,
-    slaBreachedCount:   overdue ?? 0,
+    slaBreachedCount:   overdue,
     csatScore:          0,           // no ratings table yet
   };
 }
@@ -156,16 +143,11 @@ export interface PriorityBar {
 }
 
 export async function getChartData(orgId: string) {
-  const supabase = await createClient();
-
-  const { data: tickets } = await supabase
-    .from("tickets")
-    .select("status, priority, created_at, updated_at")
-    .eq("org_id", orgId)
-    .gte("created_at", daysAgo(30))
-    .order("created_at");
-
-  const rows = tickets ?? [];
+  const rows = await prisma.ticket.findMany({
+    where:   { organizationId: orgId, createdAt: { gte: daysAgo(30) } },
+    select:  { status: true, priority: true, createdAt: true, updatedAt: true },
+    orderBy: { createdAt: "asc" },
+  });
 
   // Last 7 days volume
   const volumeMap: Record<string, { created: number; resolved: number }> = {};
@@ -176,10 +158,10 @@ export async function getChartData(orgId: string) {
   }
 
   rows.forEach((t) => {
-    const dayLabel = new Date(t.created_at).toLocaleDateString("en-US", { weekday: "short" });
+    const dayLabel = t.createdAt.toLocaleDateString("en-US", { weekday: "short" });
     if (volumeMap[dayLabel]) volumeMap[dayLabel].created++;
-    if (t.status === "resolved" && t.updated_at) {
-      const resLabel = new Date(t.updated_at).toLocaleDateString("en-US", { weekday: "short" });
+    if (t.status === "resolved" && t.updatedAt) {
+      const resLabel = t.updatedAt.toLocaleDateString("en-US", { weekday: "short" });
       if (volumeMap[resLabel]) volumeMap[resLabel].resolved++;
     }
   });
@@ -190,13 +172,13 @@ export async function getChartData(orgId: string) {
   }));
 
   // Status distribution (all-time for org)
-  const { data: allTickets } = await supabase
-    .from("tickets")
-    .select("status")
-    .eq("org_id", orgId);
+  const allTickets = await prisma.ticket.findMany({
+    where:  { organizationId: orgId },
+    select: { status: true },
+  });
 
   const statusCounts: Record<string, number> = { open: 0, pending: 0, resolved: 0, closed: 0 };
-  (allTickets ?? []).forEach((t) => { statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1; });
+  allTickets.forEach((t) => { statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1; });
 
   const statusData: StatusSlice[] = [
     { name: "Open",     value: statusCounts.open,     color: "#5148D0" },
@@ -233,30 +215,31 @@ export interface AssignedTicket {
 }
 
 export async function getAssignedTickets(orgId: string, userId: string): Promise<AssignedTicket[]> {
-  const supabase = await createClient();
   const overdueThresh = daysAgo(1);
 
-  const { data } = await supabase
-    .from("tickets")
-    .select("id, title, status, priority, updated_at, created_at, customers(name)")
-    .eq("org_id", orgId)
-    .eq("assignee_id", userId)
-    .in("status", ["open", "pending"])
-    .order("updated_at", { ascending: false })
-    .limit(8);
-
-  return (data ?? []).map((t) => {
-    const customer = Array.isArray(t.customers) ? t.customers[0] : t.customers;
-    return {
-      id:           t.id,
-      title:        t.title,
-      status:       t.status,
-      priority:     t.priority,
-      customerName: (customer as { name: string } | null)?.name ?? "Unknown",
-      updatedAt:    t.updated_at,
-      isOverdue:    ["high", "urgent"].includes(t.priority) && t.created_at < overdueThresh,
-    };
+  const rows = await prisma.ticket.findMany({
+    where: {
+      organizationId: orgId,
+      assigneeId: userId,
+      status: { in: ["open", "pending"] },
+    },
+    select: {
+      id: true, title: true, status: true, priority: true, updatedAt: true, createdAt: true,
+      customer: { select: { name: true } },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 8,
   });
+
+  return rows.map((t) => ({
+    id:           t.id,
+    title:        t.title,
+    status:       t.status,
+    priority:     t.priority,
+    customerName: t.customer?.name ?? "Unknown",
+    updatedAt:    t.updatedAt.toISOString(),
+    isOverdue:    ["high", "urgent"].includes(t.priority) && t.createdAt < overdueThresh,
+  }));
 }
 
 // ─── Recent activity ──────────────────────────────────────────────────────────
@@ -272,39 +255,37 @@ export interface ActivityItem {
 }
 
 export async function getRecentActivity(orgId: string): Promise<ActivityItem[]> {
-  const supabase = await createClient();
+  const [recentMessages, recentTickets] = await Promise.all([
+    prisma.ticketMessage.findMany({
+      where:   { ticket: { organizationId: orgId } },
+      select:  { id: true, isAi: true, isCustomer: true, createdAt: true, ticket: { select: { id: true, title: true } } },
+      orderBy: { createdAt: "desc" },
+      take:    10,
+    }),
 
-  const [{ data: recentMessages }, { data: recentTickets }] = await Promise.all([
-    supabase.from("ticket_messages")
-      .select("id, content, is_ai, is_customer, created_at, tickets!inner(id, title, org_id)")
-      .eq("tickets.org_id", orgId)
-      .order("created_at", { ascending: false })
-      .limit(10),
-
-    supabase.from("tickets")
-      .select("id, title, status, created_at, updated_at")
-      .eq("org_id", orgId)
-      .order("updated_at", { ascending: false })
-      .limit(6),
+    prisma.ticket.findMany({
+      where:   { organizationId: orgId },
+      select:  { id: true, title: true, status: true, createdAt: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+      take:    6,
+    }),
   ]);
 
   const items: ActivityItem[] = [];
 
-  (recentMessages ?? []).forEach((m) => {
-    const ticket = Array.isArray(m.tickets) ? m.tickets[0] : m.tickets;
-    const ticketData = ticket as { id: string; title: string } | null;
+  recentMessages.forEach((m) => {
     items.push({
       id:          m.id,
-      type:        m.is_ai ? "ai_suggestion" : m.is_customer ? "ticket_replied" : "ticket_replied",
-      actorName:   m.is_ai ? "AI" : m.is_customer ? "Customer" : "Agent",
-      description: m.is_ai ? "drafted a reply for" : "replied to",
-      ticketId:    ticketData?.id,
-      ticketTitle: ticketData?.title,
-      createdAt:   m.created_at,
+      type:        m.isAi ? "ai_suggestion" : m.isCustomer ? "ticket_replied" : "ticket_replied",
+      actorName:   m.isAi ? "AI" : m.isCustomer ? "Customer" : "Agent",
+      description: m.isAi ? "drafted a reply for" : "replied to",
+      ticketId:    m.ticket.id,
+      ticketTitle: m.ticket.title,
+      createdAt:   m.createdAt.toISOString(),
     });
   });
 
-  (recentTickets ?? []).forEach((t) => {
+  recentTickets.forEach((t) => {
     const isResolved = t.status === "resolved";
     items.push({
       id:          `ticket-${t.id}`,
@@ -313,7 +294,7 @@ export async function getRecentActivity(orgId: string): Promise<ActivityItem[]> 
       description: isResolved ? "resolved" : "opened",
       ticketId:    t.id,
       ticketTitle: t.title,
-      createdAt:   isResolved ? t.updated_at : t.created_at,
+      createdAt:   (isResolved ? t.updatedAt : t.createdAt).toISOString(),
     });
   });
 
@@ -335,47 +316,42 @@ export interface TeamMemberStats {
 }
 
 export async function getTeamPerformance(orgId: string): Promise<TeamMemberStats[]> {
-  const supabase = await createClient();
+  const members = await prisma.profile.findMany({
+    where:  { organizationId: orgId },
+    select: { id: true, fullName: true, role: true },
+    take:   10,
+  });
 
-  const { data: members } = await supabase
-    .from("profiles")
-    .select("id, full_name, role")
-    .eq("org_id", orgId)
-    .limit(10);
-
-  if (!members?.length) return [];
+  if (!members.length) return [];
 
   const memberIds  = members.map((m) => m.id);
   const monthStart = startOfMonth();
 
-  const [{ data: openTickets }, { data: resolvedMonth }] = await Promise.all([
-    supabase.from("tickets")
-      .select("assignee_id")
-      .eq("org_id", orgId)
-      .in("status", ["open", "pending"])
-      .in("assignee_id", memberIds),
+  const [openTickets, resolvedMonth] = await Promise.all([
+    prisma.ticket.findMany({
+      where:  { organizationId: orgId, status: { in: ["open", "pending"] }, assigneeId: { in: memberIds } },
+      select: { assigneeId: true },
+    }),
 
-    supabase.from("tickets")
-      .select("assignee_id")
-      .eq("org_id", orgId)
-      .eq("status", "resolved")
-      .gte("updated_at", monthStart)
-      .in("assignee_id", memberIds),
+    prisma.ticket.findMany({
+      where:  { organizationId: orgId, status: "resolved", updatedAt: { gte: monthStart }, assigneeId: { in: memberIds } },
+      select: { assigneeId: true },
+    }),
   ]);
 
   const openMap:     Record<string, number> = {};
   const resolvedMap: Record<string, number> = {};
 
-  (openTickets ?? []).forEach((t) => {
-    if (t.assignee_id) openMap[t.assignee_id] = (openMap[t.assignee_id] ?? 0) + 1;
+  openTickets.forEach((t) => {
+    if (t.assigneeId) openMap[t.assigneeId] = (openMap[t.assigneeId] ?? 0) + 1;
   });
-  (resolvedMonth ?? []).forEach((t) => {
-    if (t.assignee_id) resolvedMap[t.assignee_id] = (resolvedMap[t.assignee_id] ?? 0) + 1;
+  resolvedMonth.forEach((t) => {
+    if (t.assigneeId) resolvedMap[t.assigneeId] = (resolvedMap[t.assigneeId] ?? 0) + 1;
   });
 
   return members.map((m) => ({
     userId:            m.id,
-    fullName:          m.full_name,
+    fullName:          m.fullName,
     role:              m.role,
     openTickets:       openMap[m.id] ?? 0,
     resolvedThisMonth: resolvedMap[m.id] ?? 0,
@@ -395,33 +371,34 @@ export interface SlaTicket {
 }
 
 export async function getSlaTickets(orgId: string): Promise<SlaTicket[]> {
-  const supabase = await createClient();
   const threshold = daysAgo(0.5); // > 12h old
 
-  const { data } = await supabase
-    .from("tickets")
-    .select("id, title, created_at, customers(name), profiles!assignee_id(full_name)")
-    .eq("org_id", orgId)
-    .in("status", ["open", "pending"])
-    .in("priority", ["high", "urgent"])
-    .lt("created_at", threshold)
-    .order("created_at")
-    .limit(8);
+  const rows = await prisma.ticket.findMany({
+    where: {
+      organizationId: orgId,
+      status: { in: ["open", "pending"] },
+      priority: { in: ["high", "urgent"] },
+      createdAt: { lt: threshold },
+    },
+    select: {
+      id: true, title: true, createdAt: true,
+      customer: { select: { name: true } },
+      assignee: { select: { fullName: true } },
+    },
+    orderBy: { createdAt: "asc" },
+    take: 8,
+  });
 
   const now = Date.now();
-  return (data ?? []).map((t) => {
-    const customer = Array.isArray(t.customers) ? t.customers[0] : t.customers;
-    const assignee = Array.isArray(t.profiles)  ? t.profiles[0]  : t.profiles;
-    return {
-      id:           t.id,
-      title:        t.title,
-      customerName: (customer as { name: string } | null)?.name ?? "Unknown",
-      assigneeName: (assignee as { full_name: string } | null)?.full_name,
-      hoursOverdue: parseFloat(
-        ((now - new Date(t.created_at).getTime()) / 36e5).toFixed(1)
-      ),
-    };
-  });
+  return rows.map((t) => ({
+    id:           t.id,
+    title:        t.title,
+    customerName: t.customer?.name ?? "Unknown",
+    assigneeName: t.assignee?.fullName,
+    hoursOverdue: parseFloat(
+      ((now - t.createdAt.getTime()) / 36e5).toFixed(1)
+    ),
+  }));
 }
 
 // ─── Customer insights ────────────────────────────────────────────────────────
@@ -435,24 +412,19 @@ export interface CustomerInsight {
 }
 
 export async function getCustomerInsights(orgId: string): Promise<CustomerInsight[]> {
-  const supabase = await createClient();
-
-  const { data: tickets } = await supabase
-    .from("tickets")
-    .select("customer_id, status, customers(id, name, email)")
-    .eq("org_id", orgId)
-    .not("customer_id", "is", null)
-    .limit(200);
+  const tickets = await prisma.ticket.findMany({
+    where:  { organizationId: orgId, customerId: { not: null } },
+    select: { customerId: true, status: true, customer: { select: { id: true, name: true, email: true } } },
+    take:   200,
+  });
 
   const customerMap: Record<string, { name: string; email: string; count: number; open: number }> = {};
 
-  (tickets ?? []).forEach((t) => {
-    const c = Array.isArray(t.customers) ? t.customers[0] : t.customers;
-    const customer = c as { id: string; name: string; email: string } | null;
-    if (!customer || !t.customer_id) return;
-    const id = t.customer_id;
+  tickets.forEach((t) => {
+    if (!t.customer || !t.customerId) return;
+    const id = t.customerId;
     if (!customerMap[id]) {
-      customerMap[id] = { name: customer.name, email: customer.email, count: 0, open: 0 };
+      customerMap[id] = { name: t.customer.name, email: t.customer.email, count: 0, open: 0 };
     }
     customerMap[id].count++;
     if (["open", "pending"].includes(t.status)) customerMap[id].open++;

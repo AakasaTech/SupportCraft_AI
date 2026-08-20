@@ -1,17 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
 import { getCannedResponses } from "@/features/settings/actions/cannedResponses";
 import { CannedResponsesManager } from "@/features/settings/components/CannedResponsesManager";
 
 export const metadata: Metadata = { title: "Canned Responses | SupportCraft" };
 
 export default async function CannedResponsesPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  await requireAuth();
 
   const items = await getCannedResponses();
 

@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { removeMember, revokeInvitation } from "../actions/inviteTeamMember";
 import { formatDate } from "@/lib/utils";
-import type { Profile, Invitation } from "@/types/database";
+import type { Profile, Invitation } from "@/lib/generated/prisma/client";
 
 interface TeamMemberListProps {
-  members: Pick<Profile, "id" | "full_name" | "email" | "role" | "avatar_url" | "created_at">[];
-  invitations: Pick<Invitation, "id" | "email" | "role" | "expires_at" | "created_at">[];
+  members: Pick<Profile, "id" | "fullName" | "email" | "role" | "avatarUrl" | "createdAt">[];
+  invitations: Pick<Invitation, "id" | "email" | "role" | "expiresAt" | "createdAt">[];
   currentUserId: string;
   isAdmin: boolean;
 }
@@ -40,14 +40,14 @@ export function TeamMemberList({ members, invitations, currentUserId, isAdmin }:
             <div key={member.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
               <div className="flex items-center gap-3">
                 <Avatar className="h-9 w-9">
-                  <AvatarImage src={member.avatar_url ?? undefined} />
+                  <AvatarImage src={member.avatarUrl ?? undefined} />
                   <AvatarFallback className="text-sm">
-                    {member.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                    {member.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{member.full_name}</span>
+                    <span className="text-sm font-medium">{member.fullName}</span>
                     {member.id === currentUserId && (
                       <Badge variant="secondary" className="text-xs">You</Badge>
                     )}
@@ -88,7 +88,7 @@ export function TeamMemberList({ members, invitations, currentUserId, isAdmin }:
                   </div>
                   <div>
                     <span className="text-sm font-medium">{inv.email}</span>
-                    <p className="text-xs text-muted-foreground">Expires {formatDate(inv.expires_at)}</p>
+                    <p className="text-xs text-muted-foreground">Expires {formatDate(inv.expiresAt)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

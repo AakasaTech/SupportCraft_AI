@@ -3,7 +3,7 @@ import { parseEmail } from "./parser";
 import { resolveTenant, type Env } from "./tenant-resolver";
 import { detectSpamSignals, shouldReject } from "./spam-guard";
 import { buildPayload } from "./payload-builder";
-import { forwardToSupabase } from "./forwarder";
+import { forwardToApp } from "./forwarder";
 
 export default {
   async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext) {
@@ -33,9 +33,9 @@ export default {
     // ── 4. Build structured payload ──────────────────────────────────────────
     const payload = buildPayload(parsed, tenant, message.to, signals);
 
-    // ── 5. Forward to Supabase Edge Function (non-blocking — SMTP accepted) ──
+    // ── 5. Forward directly to the app's processing pipeline (non-blocking) ──
     ctx.waitUntil(
-      forwardToSupabase(payload, env.SUPABASE_INBOUND_URL, env.INBOUND_SECRET).then(
+      forwardToApp(payload, `${env.APP_URL}/api/email/process`, env.INBOUND_SECRET).then(
         result => {
           if (!result.ok) {
             console.error("Forward failed:", result.error, result.status);
@@ -43,6 +43,6 @@ export default {
         }
       )
     );
-    // Email is accepted at SMTP level regardless — Supabase retries via queue
+    // Email is accepted at SMTP level regardless — no retry on forward failure
   },
 };

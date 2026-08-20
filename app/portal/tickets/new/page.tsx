@@ -2,15 +2,14 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 import { PortalCreateTicketForm } from "./PortalCreateTicketForm";
 
 export const metadata: Metadata = { title: "New Ticket" };
 
 export default async function PortalNewTicketPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");

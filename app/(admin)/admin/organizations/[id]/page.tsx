@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { PLAN_NAMES, resolveEffectivePlan } from "@/lib/plans";
 import { GrantFreepassDialog } from "./GrantFreepassDialog";
 import { RevokeFreepassButton } from "./RevokeFreepassButton";
 import { ChevronLeft, BadgeCheck, Users, Ticket, Zap } from "lucide-react";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -13,31 +13,28 @@ interface Props {
 
 export default async function AdminOrgDetailPage({ params }: Props) {
   const { id } = await params;
-  const supabase = createAdminClient();
 
-  const [
-    { data: org },
-    { data: members },
-    { count: ticketCount },
-    { count: aiCount },
-  ] = await Promise.all([
-    supabase.from("organizations").select("*").eq("id", id).single(),
-    supabase.from("profiles").select("id, full_name, email, role, is_active").eq("org_id", id),
-    supabase.from("tickets").select("*", { count: "exact", head: true }).eq("org_id", id),
-    supabase.from("ai_usage_logs").select("*", { count: "exact", head: true }).eq("org_id", id),
+  const [org, members, ticketCount, aiCount] = await Promise.all([
+    prisma.organization.findUnique({ where: { id } }),
+    prisma.profile.findMany({
+      where:  { organizationId: id },
+      select: { id: true, fullName: true, email: true, role: true, isActive: true },
+    }),
+    prisma.ticket.count({ where: { organizationId: id } }),
+    prisma.aiUsageLog.count({ where: { organizationId: id } }),
   ]);
 
   if (!org) notFound();
 
   const effective = resolveEffectivePlan({
-    plan:           org.plan as OrgPlan,
-    freepass_plan:  org.freepass_plan ?? null,
-    freepass_until: org.freepass_until ?? null,
+    plan:           org.plan,
+    freepass_plan:  org.freepassPlan ?? null,
+    freepass_until: org.freepassUntil?.toISOString() ?? null,
   });
 
   const hasFreepass =
-    org.freepass_plan &&
-    (!org.freepass_until || new Date(org.freepass_until) > new Date());
+    org.freepassPlan &&
+    (!org.freepassUntil || org.freepassUntil > new Date());
 
   return (
     <div>
@@ -89,24 +86,24 @@ export default async function AdminOrgDetailPage({ params }: Props) {
               <p className="text-sm text-muted-foreground">
                 Active:{" "}
                 <span className="font-medium text-foreground">
-                  {PLAN_NAMES[org.freepass_plan as OrgPlan]}
+                  {PLAN_NAMES[org.freepassPlan as OrgPlan]}
                 </span>
                 {" "}until{" "}
                 <span className="font-medium text-foreground">
-                  {org.freepass_until
-                    ? new Date(org.freepass_until).toLocaleDateString("en-US", { dateStyle: "long" })
+                  {org.freepassUntil
+                    ? org.freepassUntil.toLocaleDateString("en-US", { dateStyle: "long" })
                     : "Permanent"}
                 </span>
               </p>
             </div>
             <div className="flex gap-2">
-              <GrantFreepassDialog orgId={org.id} currentFreepassPlan={org.freepass_plan as OrgPlan} />
+              <GrantFreepassDialog orgId={org.id} currentFreepassPlan={org.freepassPlan as OrgPlan} />
               <RevokeFreepassButton orgId={org.id} />
             </div>
           </div>
         ) : (
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">No active free pass. Base plan: {PLAN_NAMES[org.plan as OrgPlan]}.</p>
+            <p className="text-sm text-muted-foreground">No active free pass. Base plan: {PLAN_NAMES[org.plan]}.</p>
             <GrantFreepassDialog orgId={org.id} currentFreepassPlan={null} />
           </div>
         )}
@@ -127,9 +124,9 @@ export default async function AdminOrgDetailPage({ params }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {(members ?? []).map((m) => (
+            {members.map((m) => (
               <tr key={m.id} className="hover:bg-muted/30">
-                <td className="px-4 py-3 font-medium">{m.full_name}</td>
+                <td className="px-4 py-3 font-medium">{m.fullName}</td>
                 <td className="px-4 py-3 text-muted-foreground">{m.email}</td>
                 <td className="px-4 py-3">
                   <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium capitalize">
@@ -139,12 +136,12 @@ export default async function AdminOrgDetailPage({ params }: Props) {
                 <td className="px-4 py-3">
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      (m.is_active ?? true)
+                      m.isActive
                         ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                         : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                     }`}
                   >
-                    {(m.is_active ?? true) ? "Active" : "Suspended"}
+                    {m.isActive ? "Active" : "Suspended"}
                   </span>
                 </td>
               </tr>

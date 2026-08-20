@@ -1,12 +1,11 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { Header } from "@/components/shared/Header";
 import { PlanCards } from "@/features/billing/components/PlanCards";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PLAN_NAMES, resolveEffectivePlan } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
 import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Billing" };
@@ -17,43 +16,24 @@ export default async function BillingPage({
   searchParams: Promise<{ subscribed?: string }>;
 }) {
   const { subscribed } = await searchParams;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
+  const org = user.organization;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("org_id")
-    .eq("id", user.id)
-    .single();
+  const subscription = await prisma.subscription.findUnique({ where: { organizationId: orgId } });
 
-  if (!profile) redirect("/login");
-
-  const [{ data: org }, { data: subscription }] = await Promise.all([
-    supabase
-      .from("organizations")
-      .select("id, name, plan, freepass_plan, freepass_until")
-      .eq("id", profile.org_id)
-      .single(),
-    supabase
-      .from("subscriptions")
-      .select("*")
-      .eq("org_id", profile.org_id)
-      .single(),
-  ]);
-
-  if (!org) redirect("/login");
-
-  const effectivePlan = resolveEffectivePlan({ plan: org.plan as OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const effectivePlan = resolveEffectivePlan({
+    plan: org.plan,
+    freepass_plan: org.freepassPlan,
+    freepass_until: org.freepassUntil?.toISOString() ?? null,
+  });
   const hasFreepass = effectivePlan !== org.plan;
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const { count: aiUsageThisMonth } = await supabase
-    .from("ai_usage_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", profile.org_id)
-    .gte("created_at", startOfMonth);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const aiUsageThisMonth = await prisma.aiUsageLog.count({
+    where: { organizationId: orgId, createdAt: { gte: startOfMonth } },
+  });
 
   return (
     <div>
@@ -83,13 +63,13 @@ export default async function BillingPage({
                 </span>
               )}
             </div>
-            {subscription?.current_period_end && (
+            {subscription?.currentPeriodEnd && (
               <p className="text-sm text-muted-foreground">
-                Renews {formatDate(subscription.current_period_end)}
+                Renews {formatDate(subscription.currentPeriodEnd)}
               </p>
             )}
             <p className="text-sm text-muted-foreground">
-              AI usage this month: {aiUsageThisMonth ?? 0} calls
+              AI usage this month: {aiUsageThisMonth} calls
             </p>
           </CardContent>
         </Card>

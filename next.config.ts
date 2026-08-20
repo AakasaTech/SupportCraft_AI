@@ -9,12 +9,7 @@ if (process.env.NODE_ENV === "development") {
 const nextConfig: NextConfig = {
   output: "standalone",
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "*.supabase.co",
-      },
-    ],
+    remotePatterns: [],
   },
   serverExternalPackages: ["nodemailer"],
 };

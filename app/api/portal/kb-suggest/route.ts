@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,16 +9,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ articles: [] });
     }
 
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from("knowledge_articles")
-      .select("id, title, category")
-      .in("org_id", orgIds)
-      .eq("status", "published")
-      .or(`title.ilike.%${query.trim()}%,content.ilike.%${query.trim()}%`)
-      .limit(4);
+    const trimmed = query.trim();
+    const articles = await prisma.knowledgeArticle.findMany({
+      where: {
+        organizationId: { in: orgIds },
+        status: "published",
+        OR: [
+          { title:   { contains: trimmed, mode: "insensitive" } },
+          { content: { contains: trimmed, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, title: true, category: true },
+      take: 4,
+    });
 
-    return NextResponse.json({ articles: data ?? [] });
+    return NextResponse.json({ articles });
   } catch {
     return NextResponse.json({ articles: [] });
   }

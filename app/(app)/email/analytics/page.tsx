@@ -1,38 +1,31 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft, TrendingUp, Send, Inbox, AlertCircle, MousePointerClick } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { getEmailStats, getEmailVolume } from "@/lib/email/analytics";
 
 export const metadata: Metadata = { title: "Email Analytics | SupportCraft" };
 
 export default async function EmailAnalyticsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const user = await requireAuth();
+  const orgId = user.profile.organizationId;
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) redirect("/login");
-
-  const [stats, volume, { data: topSenders }] = await Promise.all([
-    getEmailStats(profile.org_id, 30),
-    getEmailVolume(profile.org_id, 30),
-    admin
-      .from("email_messages")
-      .select("from_address")
-      .eq("org_id", profile.org_id)
-      .eq("direction", "inbound")
-      .order("created_at", { ascending: false })
-      .limit(100),
+  const [stats, volume, topSenders] = await Promise.all([
+    getEmailStats(orgId, 30),
+    getEmailVolume(orgId, 30),
+    prisma.emailMessage.findMany({
+      where:   { organizationId: orgId, direction: "inbound" },
+      select:  { fromAddress: true },
+      orderBy: { createdAt: "desc" },
+      take:    100,
+    }),
   ]);
 
   // Top senders
   const senderCounts: Record<string, number> = {};
-  for (const m of topSenders ?? []) {
-    senderCounts[m.from_address] = (senderCounts[m.from_address] ?? 0) + 1;
+  for (const m of topSenders) {
+    senderCounts[m.fromAddress] = (senderCounts[m.fromAddress] ?? 0) + 1;
   }
   const topSenderList = Object.entries(senderCounts)
     .sort(([, a], [, b]) => b - a)

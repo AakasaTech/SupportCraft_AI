@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 import { verifyWebhookSignature } from "@/lib/paypal";
 
 export async function POST(request: Request) {
@@ -15,7 +15,6 @@ export async function POST(request: Request) {
   }
 
   const event = JSON.parse(body);
-  const supabase = createAdminClient();
 
   switch (event.event_type) {
     case "BILLING.SUBSCRIPTION.ACTIVATED": {
@@ -23,21 +22,32 @@ export async function POST(request: Request) {
       const customId = event.resource.custom_id as string | undefined;
 
       if (customId) {
-        await supabase
-          .from("subscriptions")
-          .upsert({
-            org_id: customId,
-            paypal_subscription_id: subscriptionId,
-            plan: getPlanFromSubscription(event.resource),
-            status: "active",
-            current_period_end: event.resource.billing_info?.next_billing_time ?? null,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "org_id" });
+        const plan = getPlanFromSubscription(event.resource);
+        const currentPeriodEnd = event.resource.billing_info?.next_billing_time
+          ? new Date(event.resource.billing_info.next_billing_time)
+          : null;
 
-        await supabase
-          .from("organizations")
-          .update({ plan: getPlanFromSubscription(event.resource), updated_at: new Date().toISOString() })
-          .eq("id", customId);
+        await prisma.subscription.upsert({
+          where:  { organizationId: customId },
+          create: {
+            organizationId: customId,
+            paypalSubscriptionId: subscriptionId,
+            plan,
+            status: "active",
+            currentPeriodEnd,
+          },
+          update: {
+            paypalSubscriptionId: subscriptionId,
+            plan,
+            status: "active",
+            currentPeriodEnd,
+          },
+        });
+
+        await prisma.organization.update({
+          where: { id: customId },
+          data:  { plan },
+        });
       }
       break;
     }
@@ -46,36 +56,36 @@ export async function POST(request: Request) {
     case "BILLING.SUBSCRIPTION.EXPIRED": {
       const subscriptionId = event.resource.id;
 
-      const { data: sub } = await supabase
-        .from("subscriptions")
-        .select("org_id")
-        .eq("paypal_subscription_id", subscriptionId)
-        .single();
+      const sub = await prisma.subscription.findFirst({
+        where:  { paypalSubscriptionId: subscriptionId },
+        select: { organizationId: true },
+      });
 
       if (sub) {
-        await supabase
-          .from("subscriptions")
-          .update({ plan: "free", status: "cancelled", updated_at: new Date().toISOString() })
-          .eq("paypal_subscription_id", subscriptionId);
+        await prisma.subscription.updateMany({
+          where: { paypalSubscriptionId: subscriptionId },
+          data:  { plan: "free", status: "cancelled" },
+        });
 
-        await supabase
-          .from("organizations")
-          .update({ plan: "free", updated_at: new Date().toISOString() })
-          .eq("id", sub.org_id);
+        await prisma.organization.update({
+          where: { id: sub.organizationId },
+          data:  { plan: "free" },
+        });
       }
       break;
     }
 
     case "BILLING.SUBSCRIPTION.RENEWED": {
       const subscriptionId = event.resource.id;
-      await supabase
-        .from("subscriptions")
-        .update({
+      await prisma.subscription.updateMany({
+        where: { paypalSubscriptionId: subscriptionId },
+        data: {
           status: "active",
-          current_period_end: event.resource.billing_info?.next_billing_time ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("paypal_subscription_id", subscriptionId);
+          currentPeriodEnd: event.resource.billing_info?.next_billing_time
+            ? new Date(event.resource.billing_info.next_billing_time)
+            : null,
+        },
+      });
       break;
     }
   }

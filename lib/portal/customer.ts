@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
 
 export interface PortalCustomer {
   id:       string;
@@ -11,77 +11,55 @@ export interface PortalCustomer {
 /**
  * Resolve all customer records for a portal user across all organisations.
  *
- * Agents create customers with auth_user_id = NULL. On first portal login
- * we fall back to email matching (case-insensitive), link auth_user_id on
- * every unlinked matched row, and return all customers so the portal shows
- * tickets from every organisation that knows this person.
+ * Agents create customers with userId = NULL. On first portal login we fall
+ * back to email matching (case-insensitive) and return every matching row so
+ * the portal shows tickets from every organisation that knows this person.
+ *
+ * `Customer.userId` is unique (one linked customer per NextAuth user), so at
+ * most one of the email-matched rows can actually be linked — we link the
+ * first unlinked match for an instant fast-path next time; any others keep
+ * resolving via the slower email lookup on every login.
  */
 export async function resolvePortalCustomers(
   userId: string,
   userEmail: string,
 ): Promise<PortalCustomer[]> {
-  const admin = createAdminClient();
+  const linked = await prisma.customer.findUnique({
+    where: { userId },
+    select: { id: true, name: true, email: true, organizationId: true, organization: { select: { name: true } } },
+  });
 
-  // 1. Fast path: already linked
-  try {
-    const { data: linked } = await admin
-      .from("customers")
-      .select("id, name, email, org_id")
-      .eq("auth_user_id", userId);
-
-    if (linked && linked.length > 0) {
-      return await attachOrgNames(admin, linked as { id: string; name: string; email: string; org_id: string }[]);
-    }
-  } catch {
-    // auth_user_id column not present yet — fall through to email lookup
-  }
+  if (linked) return [toPortalCustomer(linked)];
 
   if (!userEmail) return [];
 
-  // 2. Slow path: find by email (case-insensitive)
-  const { data: byEmail, error } = await admin
-    .from("customers")
-    .select("id, name, email, auth_user_id, org_id")
-    .ilike("email", userEmail);
+  const byEmail = await prisma.customer.findMany({
+    where: { email: { equals: userEmail, mode: "insensitive" } },
+    select: { id: true, name: true, email: true, organizationId: true, userId: true, organization: { select: { name: true } } },
+  });
 
-  if (error || !byEmail || byEmail.length === 0) return [];
+  if (byEmail.length === 0) return [];
 
-  // 3. Link unlinked rows so next login is instant
-  const unlinkedIds = byEmail
-    .filter((c: { auth_user_id: string | null }) => !c.auth_user_id)
-    .map((c: { id: string }) => c.id);
-
-  if (unlinkedIds.length > 0) {
-    try {
-      await admin
-        .from("customers")
-        .update({ auth_user_id: userId })
-        .in("id", unlinkedIds);
-    } catch {
-      // auth_user_id column not present — linking skipped
-    }
+  const firstUnlinked = byEmail.find((c) => !c.userId);
+  if (firstUnlinked) {
+    await prisma.customer.update({ where: { id: firstUnlinked.id }, data: { userId } });
   }
 
-  return await attachOrgNames(admin, byEmail as { id: string; name: string; email: string; org_id: string }[]);
+  return byEmail.map(toPortalCustomer);
 }
 
-async function attachOrgNames(
-  admin: ReturnType<typeof createAdminClient>,
-  customers: { id: string; name: string; email: string; org_id: string }[],
-): Promise<PortalCustomer[]> {
-  const orgIds = [...new Set(customers.map((c) => c.org_id))];
-  const { data: orgs } = await admin
-    .from("organizations")
-    .select("id, name")
-    .in("id", orgIds);
-
-  const orgMap = new Map((orgs ?? []).map((o: { id: string; name: string }) => [o.id, o.name]));
-
-  return customers.map((c) => ({
+function toPortalCustomer(c: {
+  id: string;
+  name: string;
+  email: string;
+  organizationId: string;
+  organization: { name: string };
+}): PortalCustomer {
+  return {
     id:       c.id,
     name:     c.name,
     email:    c.email,
-    org_id:   c.org_id,
-    org_name: orgMap.get(c.org_id) ?? "Support",
-  }));
+    org_id:   c.organizationId,
+    org_name: c.organization.name,
+  };
 }

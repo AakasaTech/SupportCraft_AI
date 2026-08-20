@@ -14,7 +14,7 @@ import Link from "next/link";
 import { ArrowUpDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
-import type { Customer } from "@/types/database";
+import type { Customer } from "@/lib/generated/prisma/client";
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -67,10 +67,10 @@ export function CustomerTable({ customers }: CustomerTableProps) {
         ),
     },
     {
-      accessorKey: "created_at",
+      accessorKey: "createdAt",
       header: "Added",
       cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{formatDate(row.original.created_at)}</span>
+        <span className="text-sm text-muted-foreground">{formatDate(row.original.createdAt)}</span>
       ),
     },
   ];

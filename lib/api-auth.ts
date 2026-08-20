@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createHash } from "node:crypto";
+import { prisma } from "@/lib/prisma";
 
 export interface ApiAuthContext {
-  orgId: string
-  keyId: string
+  orgId: string;
+  keyId: string;
 }
 
 /**
@@ -11,28 +11,23 @@ export interface ApiAuthContext {
  * Returns the org context, or null if the key is missing/invalid/revoked/expired.
  */
 export async function validateApiKey(authHeader: string | null): Promise<ApiAuthContext | null> {
-  if (!authHeader?.startsWith('Bearer ')) return null
-  const key = authHeader.slice(7).trim()
-  if (!key) return null
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const key = authHeader.slice(7).trim();
+  if (!key) return null;
 
-  const hash = createHash('sha256').update(key).digest('hex')
-  const db   = createAdminClient()
+  const hash = createHash("sha256").update(key).digest("hex");
 
-  const { data } = await db
-    .from('api_keys')
-    .select('id, organization_id, revoked_at, expires_at')
-    .eq('key_hash', hash)
-    .single()
+  const apiKey = await prisma.apiKey.findUnique({
+    where:  { keyHash: hash },
+    select: { id: true, organizationId: true, revokedAt: true, expiresAt: true },
+  });
 
-  if (!data) return null
-  if (data.revoked_at) return null
-  if (data.expires_at && new Date(data.expires_at) < new Date()) return null
+  if (!apiKey) return null;
+  if (apiKey.revokedAt) return null;
+  if (apiKey.expiresAt && apiKey.expiresAt < new Date()) return null;
 
-  // Update last_used_at in the background — don't await to keep latency low
-  db.from('api_keys')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', data.id)
-    .then(() => {})
+  // Update lastUsedAt in the background — don't await to keep latency low
+  prisma.apiKey.update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
 
-  return { orgId: data.organization_id, keyId: data.id }
+  return { orgId: apiKey.organizationId, keyId: apiKey.id };
 }

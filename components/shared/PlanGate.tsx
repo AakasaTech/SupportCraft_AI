@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { canUseFeature, featureRequiresPlan } from "@/lib/plans";
-import type { OrgPlan } from "@/types/database";
+import type { OrgPlan } from "@/lib/generated/prisma/client";
 import type { PlanFeature } from "@/lib/plans";
 
 interface PlanGateProps {

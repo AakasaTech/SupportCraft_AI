@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Clock, Tag } from "lucide-react";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/helpers";
+import { prisma } from "@/lib/prisma";
 import { resolvePortalCustomers } from "@/lib/portal/customer";
 import { ArticleFeedback } from "@/components/knowledge-base/articles/ArticleFeedback";
 import { ViewTracker }     from "@/components/knowledge-base/articles/ViewTracker";
@@ -18,24 +19,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PortalArticlePage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/portal/login");
 
   const customers = await resolvePortalCustomers(user.id, user.email ?? "");
   if (customers.length === 0) redirect("/portal/dashboard");
 
   const orgIds = [...new Set(customers.map((c) => c.org_id))];
-  const admin  = createAdminClient();
 
-  const { data: article } = await admin
-    .from("knowledge_articles")
-    .select("id, title, content, category, tags, updated_at, created_at, org_id")
-    .eq("id", id)
-    .eq("status", "published")
-    .single();
+  const article = await prisma.knowledgeArticle.findFirst({
+    where: { id, status: "published" },
+    select: { id: true, title: true, content: true, category: true, tags: true, updatedAt: true, createdAt: true, organizationId: true },
+  });
 
-  if (!article || !orgIds.includes(article.org_id)) notFound();
+  if (!article || !orgIds.includes(article.organizationId)) notFound();
 
   // Reading time estimate (~200 wpm) — strip HTML before counting
   const wordCount   = article.content.replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
@@ -65,7 +62,7 @@ export default async function PortalArticlePage({ params }: Props) {
             <Clock size={12} />
             {readMinutes} min read
           </span>
-          <span>Updated {new Date(article.updated_at).toLocaleDateString()}</span>
+          <span>Updated {new Date(article.updatedAt).toLocaleDateString()}</span>
         </div>
         {article.tags && article.tags.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">

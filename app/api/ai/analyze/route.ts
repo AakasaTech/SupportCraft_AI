@@ -1,26 +1,21 @@
 import { NextResponse }       from "next/server";
-import { createClient }       from "@/lib/supabase/server";
+import { getCurrentUser }     from "@/lib/auth/helpers";
+import { prisma }             from "@/lib/prisma";
 import { classifyTicket }     from "@/lib/ai/services/classify";
 import { checkAIAccess }      from "@/lib/ai/usage";
-import { createAdminClient }  from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase
-    .from("profiles").select("org_id").eq("id", user.id).single();
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-
-  const { data: org } = await supabase
-    .from("organizations").select("plan, freepass_plan, freepass_until").eq("id", profile.org_id).single();
-  if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
-
   const { resolveEffectivePlan } = await import("@/lib/plans");
-  const effectivePlan = resolveEffectivePlan({ plan: org.plan as import("@/types/database").OrgPlan, freepass_plan: org.freepass_plan ?? null, freepass_until: org.freepass_until ?? null });
+  const effectivePlan = resolveEffectivePlan({
+    plan: user.organization.plan,
+    freepass_plan: user.organization.freepassPlan,
+    freepass_until: user.organization.freepassUntil?.toISOString() ?? null,
+  });
 
-  const { allowed, reason } = await checkAIAccess(profile.org_id, effectivePlan, "ai_ticket_prioritization");
+  const { allowed, reason } = await checkAIAccess(user.profile.organizationId, effectivePlan, "ai_ticket_prioritization");
   if (!allowed) {
     return NextResponse.json({ error: reason }, { status: 429 });
   }
@@ -33,29 +28,28 @@ export async function POST(request: Request) {
 
   if (!ticketId) return NextResponse.json({ error: "ticketId is required" }, { status: 400 });
 
-  const { data: ticket } = await supabase
-    .from("tickets")
-    .select("title, description")
-    .eq("id", ticketId)
-    .eq("org_id", profile.org_id)
-    .single();
+  const ticket = await prisma.ticket.findFirst({
+    where:  { id: ticketId, organizationId: user.profile.organizationId },
+    select: { title: true, description: true },
+  });
 
   if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
 
   try {
     const { classification, sentiment } = await classifyTicket(
-      ticketId, profile.org_id, ticket.title, ticket.description, user.id
+      ticketId, user.profile.organizationId, ticket.title, ticket.description, user.id
     );
 
     if (applyToTicket) {
-      const admin = createAdminClient();
-      await admin.from("tickets").update({
-        priority:  classification.priority,
-        category:  classification.category,
-        tags:      classification.tags,
-        sentiment: sentiment.label,
-        updated_at: new Date().toISOString(),
-      }).eq("id", ticketId);
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          priority:  classification.priority,
+          category:  classification.category,
+          tags:      classification.tags,
+          sentiment: sentiment.label,
+        },
+      });
     }
 
     return NextResponse.json({ classification, sentiment });
