@@ -55,14 +55,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   callbacks: {
     ...authConfig.callbacks,
-    async signIn({ user, account }) {
-      // Auto-provision an Organization + owner Profile + free Subscription
-      // for brand-new Google sign-ins, matching the pre-migration behavior
-      // of the old /auth/google/callback route. Credentials/invitation
-      // sign-ins already have a Profile created explicitly by signUp/
-      // acceptInvitation. Magic-link (portal customer) sign-ins deliberately
-      // do NOT get an agent org — portal identity is resolved separately.
-      if (account?.provider === "google" && user.id) {
+  },
+  events: {
+    // Auto-provision an Organization + owner Profile + free Subscription for
+    // brand-new Google sign-ins, matching the pre-migration behavior of the
+    // old /auth/google/callback route. Credentials/invitation sign-ins
+    // already have a Profile created explicitly by signUp/acceptInvitation.
+    // Magic-link (portal customer) sign-ins deliberately do NOT get an agent
+    // org — portal identity is resolved separately, and the Email provider
+    // never triggers this event anyway (no Account row involved).
+    //
+    // This MUST live in the `linkAccount` event, not the `signIn` callback:
+    // the adapter only commits the new User row to the DB immediately before
+    // firing this event, whereas `signIn` runs earlier, before that row
+    // exists — writing a Profile there hit a foreign-key violation on every
+    // first-time Google sign-in (surfaced to users as a bare AccessDenied).
+    async linkAccount({ user, account }) {
+      if (account.provider === "google" && user.id) {
         const existingProfile = await prisma.profile.findUnique({ where: { userId: user.id } });
         if (!existingProfile) {
           const fullName = user.name ?? user.email?.split("@")[0] ?? "User";
@@ -87,7 +96,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
         }
       }
-      return true;
     },
   },
 });
