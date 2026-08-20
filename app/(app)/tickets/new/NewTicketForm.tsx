@@ -55,6 +55,12 @@ export function NewTicketForm({ customers, agents, departments, templates }: Pro
     setError(null);
     const fd = new FormData(e.currentTarget);
     fd.set("tags", tags.join(","));
+    // Radix Select.Item can't use value="" for the "none" options below, so
+    // they use the "none" sentinel instead — translate back to empty here so
+    // createTicket's `formData.get(...) || undefined` parsing is unaffected.
+    for (const field of ["customerId", "assigneeId", "department"]) {
+      if (fd.get(field) === "none") fd.set(field, "");
+    }
 
     startTransition(async () => {
       const result = await createTicket(fd);
@@ -175,7 +181,7 @@ export function NewTicketForm({ customers, agents, departments, templates }: Pro
                 <SelectValue placeholder="Select department" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {departments.map((d) => (
                   <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
                 ))}
@@ -202,7 +208,7 @@ export function NewTicketForm({ customers, agents, departments, templates }: Pro
               <SelectValue placeholder="Select customer" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">No customer</SelectItem>
+              <SelectItem value="none">No customer</SelectItem>
               {customers.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}{c.company ? ` (${c.company})` : ""}
@@ -218,7 +224,7 @@ export function NewTicketForm({ customers, agents, departments, templates }: Pro
               <SelectValue placeholder="Unassigned" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Unassigned</SelectItem>
+              <SelectItem value="none">Unassigned</SelectItem>
               {agents.map((a) => (
                 <SelectItem key={a.id} value={a.id}>{a.fullName}</SelectItem>
               ))}
